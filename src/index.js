@@ -5,6 +5,7 @@ import Anims from "./anims"
 import disassemble from "./sprites"
 import pathfind from "../lib/pathfind"
 import manhattan from "../lib/manhattan"
+import * as AI from "../lib/ai"
 import * as Unit from "../lib/unit"
 import * as Cell from "../lib/cell"
 import * as Map from "../lib/map"
@@ -77,12 +78,58 @@ function main(spritesheet) {
 	let view = View(sprites)
 	let canvas = view.context.canvas
 	let selecting = false
+	let strategy = null
 	root.appendChild(canvas)
 	loop()
 
 	function loop() {
 		View.render(view, game)
 		View.update(view)
+		if (phase.faction === "enemy") {
+			if (!strategy) {
+				let enemies = map.units.filter(unit => unit.faction === "enemy")
+				strategy = AI.analyze(map, "enemy")
+				for (let i = 0; i < strategy.length; i++) {
+					let actions = strategy[i]
+					let unit = enemies[i]
+					for (let action of actions) {
+						let [ type, ...data ] = action
+						if (type === "move") {
+							let [ goal ] = data
+							let range = Unit.range(map, unit)
+							for (let enemy of enemies) {
+								range.push(enemy.cell)
+							}
+							let path = pathfind(range, unit.cell, goal)
+							view.anims.push(Anim("move", unit, Anims.move(path)))
+							unit.cell = goal
+						} else if (type === "attack") {
+							let [ target ] = data
+							if (!map.units.includes(target)) {
+								continue
+							}
+							let hp = target.hp
+							Unit.attack(unit, target)
+							view.anims.push(Anim("attack", unit, Anims.attack(unit.cell, target.cell)))
+							if (target.hp < hp) {
+								view.anims.push(
+									Anim("flinch", target, Anims.flinch())
+								)
+							}
+							if (!target.hp) {
+								map.units.splice(map.units.indexOf(target), 1)
+								view.anims.push(
+									Anim("fade", target, Anims.fade())
+								)
+							}
+						}
+					}
+					Game.endTurn(game, unit)
+				}
+			}
+		} else {
+			strategy = null
+		}
 		requestAnimationFrame(loop)
 	}
 
@@ -121,7 +168,7 @@ function main(spritesheet) {
 						view.path.splice(i + 1, view.path.length - i - 1)
 						return
 					}
-					// filter out already used cells
+					// filter out occupied cells
 					let range = view.cache.range.slice()
 					for (let i = 0; i < range.length; i++) {
 						let cell = range[i]
@@ -131,6 +178,10 @@ function main(spritesheet) {
 								range.splice(i--, 1)
 							}
 						}
+					}
+					let allies = map.units.filter(other => Unit.allied(unit, other))
+					for (let ally of allies) {
+						range.push(ally.cell)
 					}
 					let pathless = range.slice()
 					for (let i = 0; i < pathless.length; i++) {
@@ -150,6 +201,9 @@ function main(spritesheet) {
 						if (neighbors.length) {
 							goal = neighbors[0]
 						}
+					}
+					if (allies.find(ally => Cell.equals(goal, ally.cell))) {
+						return
 					}
 					let path = pathfind(pathless, prev, goal)
 					if (path && view.path.length + path.length - 2 <= Unit.mov(unit)) {
@@ -177,8 +231,9 @@ function main(spritesheet) {
 		if (!view.selection) {
 			let unit = Map.unitAt(map, view.cursor)
 			if (unit
+			&& unit.faction === "player"
+			&& phase.faction === "player"
 			&& phase.pending.includes(unit)
-			&& unit.faction === phase.faction
 			) {
 				selecting = true
 				view.selection = unit

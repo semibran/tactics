@@ -32,6 +32,7 @@ function View(sprites) {
 			time: 0,
 			phase: {
 				faction: "player",
+				next: "player",
 				pending: []
 			},
 			units: [],
@@ -48,7 +49,6 @@ function render(view, game) {
 	let [ width, height ] = map.layout.size
 	let canvas = context.canvas
 	let anim = anims[0]
-
 	let order = [
 		"tiles",
 		"shadows",
@@ -67,15 +67,22 @@ function render(view, game) {
 	}
 
 	if (!cache.units.length) {
-		cache.units = map.units.slice()
+		cache.units = map.units.map(unit => Object.assign({ original: unit }, unit))
 	}
 
-	if (cache.phase.pending.length < phase.pending.length && !anims.length) {
+	if (cache.phase.pending.length < phase.pending.length && !anims.find(anim => anim.target.faction === cache.phase.faction)) {
 		cache.phase.pending = phase.pending.slice()
 	}
 
-	if (cache.phase.faction !== phase.faction && !anims.length) {
-		cache.phase.faction = phase.faction
+	if (cache.phase.faction !== cache.phase.next) {
+		let anim = anims.find(anim => anim.target.faction === cache.phase.faction)
+		if (!anim || anims.indexOf(anim) > 0) {
+			cache.phase.faction = cache.phase.next
+		}
+	}
+
+	if (cache.phase.next !== phase.faction && cache.phase.faction === cache.phase.next) {
+		cache.phase.next = phase.faction
 	}
 
 	canvas.width = width * 16
@@ -90,7 +97,6 @@ function render(view, game) {
 		cache.hover.target = view.hover.target
 		let unit = view.hover.target
 		if (view.hover.entering !== !!unit) {
-			view.hover.time = 0
 			view.hover.entering = !!unit
 		}
 		if (unit) {
@@ -115,32 +121,26 @@ function render(view, game) {
 	if (unit) {
 		let origin = unit.cell[0] >= 8
 			? -dialog.width
-			: context.canvas.width + dialog.width
+			: context.canvas.width
 
 		let target = unit.cell[0] >= 8
 			? 8
 			: context.canvas.width - dialog.width - 8
 
-		let start = null
-		let goal = null
-		if (view.hover.entering) {
-			start = origin
-			goal = target
-		} else {
-			start = target
-			goal = origin
-		}
-
-		let x = start + ((goal - start) / 8) * Math.min(view.hover.time, 8)
+		let x = origin + ((target - origin) / 8) * view.hover.time
 		let y = context.canvas.height - dialog.height - 8
+
+		if (view.hover.entering && ++view.hover.time > 8) {
+			view.hover.time = 8
+		} else if (!view.hover.entering && --view.hover.time < 0) {
+			view.hover.time = 0
+		}
 
 		layers.dialogs.push({
 			image: dialog,
 			position: [ x, y ]
 		})
 	}
-
-	view.hover.time++
 
 	unit = view.selection
 	if (unit) {
@@ -215,10 +215,15 @@ function render(view, game) {
 		let sprite = sprites.pieces[unit.faction][symbol]
 		let cell = unit.cell
 		let offset = 0
-		if (anim && unit === anim.target) {
+		if (anim && unit.original === anim.target) {
 			if (anim.type === "lift" || anim.type === "float" || anim.type === "drop") {
 				offset = -anim.data.height
-			} else if (anim.type === "move" || anim.type === "attack") {
+			} else if (anim.type === "move") {
+				cell = anim.data.cell
+				if (anim.done) {
+					unit.cell = anim.data.cell
+				}
+			} else if (anim.type === "attack") {
 				cell = anim.data.cell
 			} else if (anim.type === "flinch") {
 				if (anim.data.flashing) {
@@ -232,23 +237,23 @@ function render(view, game) {
 					continue
 				}
 			}
-		} else if (cache.phase.pending.includes(unit)
-		&& !phase.pending.includes(unit)
+		} else if (cache.phase.pending.includes(unit.original)
+		&& !phase.pending.includes(unit.original)
 		&& !anims.length // find(anim => anim.target === unit)
 		) {
-			cache.phase.pending.splice(cache.phase.pending.indexOf(unit), 1)
+			cache.phase.pending.splice(cache.phase.pending.indexOf(unit.original), 1)
 		}
 
 		let [ x, y ] = cell
 		if (unit.faction === cache.phase.faction
-		&& !cache.phase.pending.includes(unit)
-		&& !(anim && unit === anim.target)
+		&& !cache.phase.pending.includes(unit.original)
+		&& !anims.find(anim => anim.target === unit.original)
 		) {
 			sprite = sprites.pieces.done[unit.faction][symbol]
 		}
 		let layer = "pieces"
-		if (unit === view.selection
-		|| anims.find(anim => [ "lift", "float", "drop", "attack" ].includes(anim.type) && anim.target === unit)
+		if (unit.original === view.selection
+		|| anims.find(anim => [ "lift", "float", "drop", "attack" ].includes(anim.type) && anim.target === unit.original)
 		) {
 			layer = "selection"
 		}
