@@ -6,30 +6,9 @@ import manhattan from "../lib/manhattan"
 import * as Unit from "../lib/unit"
 import * as Cell from "../lib/cell"
 import * as Map from "../lib/map"
+import * as Game from "../lib/game"
 
 const root = document.querySelector("main")
-
-const Phase = (function () {
-	function next(phase) {
-		phase.faction =
-			phase.faction === "player"
-				? "enemy"
-				: "player"
-		phase.pending = map.units.filter(unit => unit.faction === phase.faction && unit.faction === "player")
-		if (!phase.pending.length) {
-			next(phase)
-		}
-	}
-
-	function wait(phase, unit) {
-		phase.pending.splice(phase.pending.indexOf(unit), 1)
-		if(!phase.pending.length) {
-			next(phase)
-		}
-	}
-
-	return { next, wait }
-})()
 
 let map = {
 	tiles: [
@@ -208,7 +187,7 @@ canvas.addEventListener("mouseup", event => {
 			if (!selecting) {
 				view.selection = null
 				view.path = []
-				Phase.wait(phase, unit)
+				Game.endTurn(game, unit)
 			} else {
 				selecting = false
 			}
@@ -244,7 +223,7 @@ canvas.addEventListener("mouseup", event => {
 					)
 				}
 			}
-			Phase.wait(phase, unit)
+			Game.endTurn(game, unit)
 		}
 		if (!selecting) {
 			view.selection = null
