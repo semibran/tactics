@@ -1,0 +1,2 @@
+# tactics
+> tiny tactics puzzles
