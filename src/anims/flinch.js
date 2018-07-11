@@ -8,7 +8,7 @@ function flinch() {
 function update(anim) {
 	if (anim.done) return
 	let data = anim.data
-	data.offset = [ Math.round(Math.random() * 2 - 1), 0 ]
+	data.offset = [ data.time % 2 - 1, 0 ]
 	if (++data.time === 10) {
 		anim.done = true
 	}
