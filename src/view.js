@@ -5,6 +5,7 @@ import Canvas from "../lib/canvas"
 import * as Map from "../lib/map"
 import * as Unit from "../lib/unit"
 import * as Cell from "../lib/cell"
+import * as Game from "../lib/game"
 
 let wall = Canvas(16, 16)
 wall.fillStyle = "lime"
@@ -19,6 +20,14 @@ function View(sprites) {
 		anims: [],
 		path: [],
 		cursor: null,
+		target: null,
+		selection: null,
+		hover: {
+			time: 0,
+			target: null,
+			dialog: null,
+			entering: false
+		},
 		cache: {
 			time: 0,
 			phase: {
@@ -26,6 +35,7 @@ function View(sprites) {
 				pending: []
 			},
 			units: [],
+			hover: { target: null, last: null },
 			range: null,
 			selection: null
 		}
@@ -64,8 +74,7 @@ function render(view, game) {
 		cache.phase.pending = phase.pending.slice()
 	}
 
-	if (cache.phase.faction !== phase.faction && !anims.length
-	) {
+	if (cache.phase.faction !== phase.faction && !anims.length) {
 		cache.phase.faction = phase.faction
 	}
 
@@ -76,7 +85,64 @@ function render(view, game) {
 	context.fillStyle = "black"
 	context.fillRect(0, 0, canvas.width, canvas.height)
 
-	let unit = view.selection
+	let dialog = view.hover.dialog
+	if (cache.hover.target !== view.hover.target) {
+		cache.hover.target = view.hover.target
+		let unit = view.hover.target
+		if (view.hover.entering !== !!unit) {
+			view.hover.time = 0
+			view.hover.entering = !!unit
+		}
+		if (unit) {
+			cache.hover.last = unit
+			let symbol = sprites.pieces.symbols[Game.equipment[unit.type]]
+			dialog = view.hover.dialog = sprites.ui.TextBox([
+				`  ${ unit.type.toUpperCase() }`,
+				``,
+				`HP  ${ unit.hp }/3`,
+				`STR ${ Unit.str(unit) }`,
+				`INT ${ Unit.int(unit) }`,
+				`AGI ${ Unit.agi(unit) }`,
+				`MOV ${ Unit.mov(unit) }`
+			])
+
+			dialog.getContext("2d")
+				.drawImage(symbol, 16, 16)
+		}
+	}
+
+	let unit = view.hover.target || cache.hover.last
+	if (unit) {
+		let origin = unit.cell[0] >= 8
+			? -dialog.width
+			: context.canvas.width + dialog.width
+
+		let target = unit.cell[0] >= 8
+			? 8
+			: context.canvas.width - dialog.width - 8
+
+		let start = null
+		let goal = null
+		if (view.hover.entering) {
+			start = origin
+			goal = target
+		} else {
+			start = target
+			goal = origin
+		}
+
+		let x = start + ((goal - start) / 8) * Math.min(view.hover.time, 8)
+		let y = context.canvas.height - dialog.height - 8
+
+		layers.dialogs.push({
+			image: dialog,
+			position: [ x, y ]
+		})
+	}
+
+	view.hover.time++
+
+	unit = view.selection
 	if (unit) {
 		if (cache.selection !== unit) {
 			cache.range = range(map, unit)
@@ -100,9 +166,9 @@ function render(view, game) {
 				continue
 			}
 			if (type === "move") {
-				context.fillStyle = "navy"
+				context.fillStyle = "blue"
 			} else if (type === "attack") {
-				context.fillStyle = "maroon"
+				context.fillStyle = "red"
 			}
 			context.fillRect(x * 16 + 1, y * 16 + 1, 15, 15)
 		}

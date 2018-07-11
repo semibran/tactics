@@ -1,5 +1,5 @@
-function drop(piece, height) {
-	return { height: 4 }
+function drop(height) {
+	return { height: Math.round(height || 4) }
 }
 
 function update(anim) {

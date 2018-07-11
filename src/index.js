@@ -93,6 +93,12 @@ function main(spritesheet) {
 		]
 		if (event.target === canvas) {
 			view.cursor = cell
+			let target = Map.unitAt(map, cell)
+			if (target) {
+				view.hover.target = target
+			} else {
+				view.hover.target = null
+			}
 			let unit = view.selection
 			if (unit) {
 				let prev = view.path[view.path.length - 1]
@@ -201,11 +207,14 @@ function main(spritesheet) {
 					view.selection = null
 					view.path = []
 					Game.endTurn(game, unit)
-					if (view.anims[0].type === "float") {
+					let height = null
+					let anim = view.anims[0]
+					if (anim && (anim.type === "lift" || anim.type === "float")) {
+						height = anim.data.height
 						view.anims.shift()
 					}
 					view.anims.push(
-						Anim("drop", unit, Anims.drop()),
+						Anim("drop", unit, Anims.drop(height)),
 					)
 				} else {
 					selecting = false
@@ -248,11 +257,14 @@ function main(spritesheet) {
 				}
 				Game.endTurn(game, unit)
 			} else {
-				if (view.anims[0].type === "float") {
+				let height = null
+				let anim = view.anims[0]
+				if (anim && (anim.type === "lift" || anim.type === "float")) {
+					height = anim.data.height
 					view.anims.shift()
 				}
 				view.anims.push(
-					Anim("drop", unit, Anims.drop()),
+					Anim("drop", unit, Anims.drop(height)),
 				)
 			}
 			if (!selecting) {
