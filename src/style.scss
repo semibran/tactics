@@ -14,3 +14,12 @@ body {
 	align-items: center;
 	background: black;
 }
+
+main {
+	transform: scale(2);
+}
+
+canvas {
+	display: block;
+	image-rendering: pixelated;
+}

@@ -1,18 +1,26 @@
 import Anim from "./anim"
 import Anims from "./anims"
 import range from "../lib/range"
+import Canvas from "../lib/canvas"
 import * as Map from "../lib/map"
 import * as Unit from "../lib/unit"
 import * as Cell from "../lib/cell"
 
-function View() {
+let wall = Canvas(16, 16)
+wall.fillStyle = "lime"
+wall.fillRect(0, 0, 16, 16)
+wall = wall.canvas
+
+function View(sprites) {
 	let canvas = document.createElement("canvas")
 	return {
+		sprites: sprites,
 		context: canvas.getContext("2d"),
 		anims: [],
 		path: [],
 		cursor: null,
 		cache: {
+			time: 0,
 			phase: {
 				faction: "player",
 				pending: []
@@ -25,11 +33,28 @@ function View() {
 }
 
 function render(view, game) {
-	let { context, anims, cursor, cache } = view
+	let { sprites, context, anims, cursor, cache } = view
 	let { map, phase } = game
 	let [ width, height ] = map.layout.size
 	let canvas = context.canvas
 	let anim = anims[0]
+
+	let order = [
+		"tiles",
+		"shadows",
+		"walls",
+		"pieces",
+		"squares",
+		"arrows",
+		"cursor",
+		"selection",
+		"dialogs"
+	]
+
+	let layers = {}
+	for (let name of order) {
+		layers[name] = []
+	}
 
 	if (!cache.units.length) {
 		cache.units = map.units.slice()
@@ -39,14 +64,13 @@ function render(view, game) {
 		cache.phase.pending = phase.pending.slice()
 	}
 
-	if (cache.phase.faction !== phase.faction
-	&& !anims.length
+	if (cache.phase.faction !== phase.faction && !anims.length
 	) {
 		cache.phase.faction = phase.faction
 	}
 
-	canvas.width = width * 32
-	canvas.height = height * 32
+	canvas.width = width * 16
+	canvas.height = height * 16
 
 	context.beginPath()
 	context.fillStyle = "black"
@@ -80,7 +104,7 @@ function render(view, game) {
 			} else if (type === "attack") {
 				context.fillStyle = "maroon"
 			}
-			context.fillRect(x * 32 + 1, y * 32 + 1, 29, 29)
+			context.fillRect(x * 16 + 1, y * 16 + 1, 15, 15)
 		}
 	} else {
 		cache.range = null
@@ -89,9 +113,15 @@ function render(view, game) {
 
 	for (let y = 0; y < height; y++) {
 		for (let x = 0; x < width; x++) {
+			context.strokeStyle = cache.phase.faction === "player"
+				? "green"
+				: "maroon"
+
 			context.beginPath()
-			context.strokeStyle = "navy"
-			context.strokeRect(x * 32 - 0.5, y * 32 - 0.5, 32, 32)
+			context.strokeRect(x * 16 - 7.5, y * 16 - 7.5, 16, 16)
+
+			context.beginPath()
+			context.strokeRect(x * 16 + 8.5, y * 16 + 8.5, 16, 16)
 		}
 	}
 
@@ -99,34 +129,35 @@ function render(view, game) {
 		for (let x = 0; x < width; x++) {
 			let tile = Map.tileAt(map, [ x, y ])
 			if (tile.name === "wall") {
-				context.beginPath()
-				context.fillStyle = cache.phase.faction === "player"
-					? "blue"
-					: "maroon"
-				context.fillRect(x * 32, y * 32, 32, 32)
+				layers.walls.push({
+					image: wall,
+					position: [ x * 16, y * 16 ]
+				})
 			}
 		}
 	}
 
-	if (cursor) {
-		let [ x, y ] = cursor
-		context.beginPath()
-		context.strokeStyle = "cyan"
-		context.lineWidth = 2
-		context.strokeRect(x * 32 + 3, y * 32 + 3, 25, 25)
-	}
-
 	for (let i = 0; i < cache.units.length; i++) {
 		let unit = cache.units[i]
+		let symbol = {
+			warrior: "axe",
+			knight: "shield",
+			rogue: "dagger",
+			mage: "hat"
+		}[unit.type]
+
+		let sprite = sprites.pieces[unit.faction][symbol]
 		let cell = unit.cell
+		let offset = 0
 		if (anim && unit === anim.target) {
-			if (anim.type === "move" || anim.type === "attack") {
+			if (anim.type === "lift" || anim.type === "float" || anim.type === "drop") {
+				offset = -anim.data.height
+			} else if (anim.type === "move" || anim.type === "attack") {
 				cell = anim.data.cell
 			} else if (anim.type === "flinch") {
-				cell = [
-					unit.cell[0] + anim.data.offset[0] / 16,
-					unit.cell[1] + anim.data.offset[1] / 16
-				]
+				if (anim.data.flashing) {
+					sprite = sprites.pieces.flashing
+				}
 			} else if (anim.type === "fade") {
 				if (anim.done) {
 					cache.units.splice(i--, 1)
@@ -143,38 +174,135 @@ function render(view, game) {
 		}
 
 		let [ x, y ] = cell
-		let color = unit.faction === "player" ? "lime" : "red"
 		if (unit.faction === cache.phase.faction
 		&& !cache.phase.pending.includes(unit)
 		&& !(anim && unit === anim.target)
 		) {
-			color = unit.faction === "player" ? "teal" : "purple"
+			sprite = sprites.pieces.done[unit.faction][symbol]
 		}
-		context.beginPath()
-		context.arc((x + 0.5) * 32, (y + 0.5) * 32, 8, 0, 2 * Math.PI)
-		context.fillStyle = color
-		context.fill()
+		let layer = "pieces"
+		if (unit === view.selection
+		|| anims.find(anim => [ "lift", "float", "drop", "attack" ].includes(anim.type) && anim.target === unit)
+		) {
+			layer = "selection"
+		}
+		layers[layer].push({
+			image: sprite,
+			position: [ x * 16, y * 16 + offset ]
+		})
+		layers.shadows.push({
+			image: sprites.pieces.shadow,
+			position: [ x * 16 + 1, y * 16 + 4 ]
+		})
 	}
 
 	if (view.path.length) {
-		for (let i = 0; i < view.path.length; i++) {
-			let cell = view.path[i]
-			let x = (cell[0] + 0.5) * 32
-			let y = (cell[1] + 0.5) * 32
-			if (!i) {
-				context.beginPath()
-				context.moveTo(x, y)
-			} else {
-				context.lineTo(x, y)
+		let path = view.path
+		for (let i = 0; i < path.length; i++) {
+			let [ x, y ] = path[i]
+			let l = false
+			let r = false
+			let u = false
+			let d = false
+
+			let prev = path[i - 1]
+			if (prev) {
+				let dx = x - prev[0]
+				let dy = y - prev[1]
+				if (dx === 1) {
+					l = true
+				} else if (dx === -1) {
+					r = true
+				}
+
+				if (dy === 1) {
+					u = true
+				} else if (dy === -1) {
+					d = true
+				}
+			}
+
+			let next = path[i + 1]
+			if (next) {
+				let dx = next[0] - x
+				let dy = next[1] - y
+				if (dx === -1) {
+					l = true
+				} else if (dx === 1) {
+					r = true
+				}
+
+				if (dy === -1) {
+					u = true
+				} else if (dy === 1) {
+					d = true
+				}
+			}
+
+			if (l || r || u || d) {
+				let direction = null
+				if (l && r) {
+					direction = "horiz"
+				} else if (u && d) {
+					direction = "vert"
+				} else if (u && l) {
+					direction = "upLeft"
+				} else if (u && r) {
+					direction = "upRight"
+				} else if (d && l) {
+					direction = "downLeft"
+				} else if (d && r) {
+					direction = "downRight"
+				} else if (l && !i) {
+					direction = "leftStub"
+				} else if (r && !i) {
+					direction = "rightStub"
+				} else if (u && !i) {
+					direction = "upStub"
+				} else if (d && !i) {
+					direction = "downStub"
+				} else if (l) {
+					direction = "left"
+				} else if (r) {
+					direction = "right"
+				} else if (u) {
+					direction = "up"
+				} else if (d) {
+					direction = "down"
+				}
+
+				if (direction) {
+					layers.arrows.push({
+						image: sprites.ui.arrows[direction],
+						position: [ x * 16, y * 16 ]
+					})
+				}
 			}
 		}
-		context.strokeStyle = "cyan"
-		context.lineWidth = 2
-		context.stroke()
+	}
+
+	if (cursor) {
+		let [ x, y ] = cursor
+		let frame = Math.floor(cache.time / 30) % sprites.ui.cursor.length
+		layers.cursor.push({
+			image: sprites.ui.cursor[frame],
+			position: [ x * 16, y * 16 ]
+		})
+	}
+
+	for (let name of order) {
+		let layer = layers[name]
+		layer.sort((a, b) => a.position[1] - b.position[1])
+
+		for (let element of layer) {
+			let [ x, y, z ] = element.position
+			context.drawImage(element.image, Math.round(x), Math.round(y))
+		}
 	}
 }
 
 function update(view) {
+	view.cache.time++
 	let anims = view.anims
 	let anim = anims[0]
 	if (!anim) return

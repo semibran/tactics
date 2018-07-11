@@ -1,3 +1,6 @@
+exports.lift = require("./anims/lift")
+exports.float = require("./anims/float")
+exports.drop = require("./anims/drop")
 exports.move = require("./anims/move")
 exports.attack = require("./anims/attack")
 exports.flinch = require("./anims/flinch")
