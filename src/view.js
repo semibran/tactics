@@ -7,11 +7,6 @@ import * as Unit from "../lib/unit"
 import * as Cell from "../lib/cell"
 import * as Game from "../lib/game"
 
-let wall = Canvas(16, 16)
-wall.fillStyle = "lime"
-wall.fillRect(0, 0, 16, 16)
-wall = wall.canvas
-
 function View(sprites) {
 	let canvas = document.createElement("canvas")
 	return {
@@ -53,8 +48,8 @@ function render(view, game) {
 		"tiles",
 		"shadows",
 		"walls",
-		"pieces",
 		"squares",
+		"pieces",
 		"arrows",
 		"cursor",
 		"selection",
@@ -142,6 +137,36 @@ function render(view, game) {
 		})
 	}
 
+	for (let y = 0; y < height + 1; y++) {
+		for (let x = 0; x < width + 1; x++) {
+			context.drawImage(sprites.tiles.floor, x * 16, y * 16)
+			context.strokeStyle = cache.phase.faction === "player"
+				? "green"
+				: "maroon"
+
+			let p = Math.round(cache.time / 16) % 16
+
+			context.beginPath()
+			context.strokeRect(x * 16 - (p + 0.5), y * 16 - (p + 0.5), 16, 16)
+		}
+	}
+
+	for (let y = 0; y < height; y++) {
+		for (let x = 0; x < width; x++) {
+			let tile = Map.tileAt(map, [ x, y ])
+			if (tile.name === "wall") {
+				let sprite = sprites.tiles.wall
+				if (Map.tileAt(map, [ x, y + 1 ]) !== tile) {
+					sprite = sprites.tiles["wall-base"]
+				}
+				layers.walls.push({
+					image: sprite,
+					position: [ x * 16, y * 16 ]
+				})
+			}
+		}
+	}
+
 	unit = view.selection
 	if (unit) {
 		if (cache.selection !== unit) {
@@ -165,42 +190,15 @@ function render(view, game) {
 			if (type !== "move" && type !== "attack") {
 				continue
 			}
-			if (type === "move") {
-				context.fillStyle = "blue"
-			} else if (type === "attack") {
-				context.fillStyle = "red"
-			}
-			context.fillRect(x * 16 + 1, y * 16 + 1, 15, 15)
+			let sprite = sprites.ui.squares[type]
+			layers.squares.push({
+				image: sprite,
+				position: [ x * 16, y * 16 ]
+			})
 		}
 	} else {
 		cache.range = null
 		cache.selection = null
-	}
-
-	for (let y = 0; y < height; y++) {
-		for (let x = 0; x < width; x++) {
-			context.strokeStyle = cache.phase.faction === "player"
-				? "green"
-				: "maroon"
-
-			context.beginPath()
-			context.strokeRect(x * 16 - 7.5, y * 16 - 7.5, 16, 16)
-
-			context.beginPath()
-			context.strokeRect(x * 16 + 8.5, y * 16 + 8.5, 16, 16)
-		}
-	}
-
-	for (let y = 0; y < height; y++) {
-		for (let x = 0; x < width; x++) {
-			let tile = Map.tileAt(map, [ x, y ])
-			if (tile.name === "wall") {
-				layers.walls.push({
-					image: wall,
-					position: [ x * 16, y * 16 ]
-				})
-			}
-		}
 	}
 
 	for (let i = 0; i < cache.units.length; i++) {
