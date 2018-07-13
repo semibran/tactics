@@ -18,41 +18,74 @@ loadImage("sprites.png")
 
 let map = {
 	tiles: [
-		{ name: "null", solid: false },
-		{ name: "wall", solid: true }
+		{ name: "grass", solid: false },
+		{ name: "wall",  solid: true  },
+		{ name: "floor", solid: false }
 	],
 	layout: {
-		size: [ 16, 16 ],
-		data: [
-			1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-			1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-			1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-			1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-			1, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1,
-			1, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1,
-			1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-			1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
-			1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1,
-			1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0,
-			1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-			1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0,
-			1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-		]
+		size: [ 25, 25 ],
+		data: (
+			"#########################" +
+			"#      ##.......##      #" +
+			"#      ##.......##      #" +
+			"#      ##.......##      #" +
+			"#      ####...####      #" +
+			"#      ####...####      #" +
+			"#      ##.......##      #" +
+			"#    ####.......####    #" +
+			"#    ####.......####    #" +
+			"#    ...............    #" +
+			"#    ####.......####    #" +
+			"#    ####.......####    #" +
+			"#      ##.......##      #" +
+			"#      ###########      #" +
+			"#      ###########      #" +
+			"#                       #" +
+			"#                       #" +
+			"#      ##       ##      #" +
+			"#      ##       ##      #" +
+			"#########       #########" +
+			"#########       #########" +
+			"                         " +
+			"                         " +
+			"                         " +
+			"                         "
+		)
+			.split("")
+			.map(c => {
+				switch (c) {
+					case " ": return 0
+					case "#": return 1
+					case ".": return 2
+				}
+			})
 	},
 	units: [
-		Unit.create("warrior", "player", false,    [ 14, 10 ]),
-		Unit.create("rogue",   "player", false,    [  1,  0 ]),
-		Unit.create("mage",    "player", false,    [  8, 11 ]),
-		Unit.create("knight",  "enemy",  "defend", [  6,  1 ]),
-		Unit.create("warrior", "enemy",  "wait",   [  4,  2 ]),
-		Unit.create("warrior", "enemy",  "wait",   [  8,  2 ]),
-		Unit.create("mage",    "enemy",  "wait",   [ 13,  1 ]),
-		Unit.create("warrior", "enemy",  "wait",   [ 12,  3 ]),
-		Unit.create("knight",  "enemy",  "wait",   [ 14,  5 ]),
-		Unit.create("mage",    "enemy",  "wait",   [ 11,  8 ])
+		Unit.create("knight",  "player", false,    [ 11, 16 ]),
+		Unit.create("knight",  "player", false,    [ 13, 16 ]),
+		Unit.create("warrior", "player", false,    [ 10, 18 ]),
+		Unit.create("rogue",   "player", false,    [ 12, 18 ]),
+		Unit.create("warrior", "player", false,    [ 14, 18 ]),
+		Unit.create("mage",    "player", false,    [ 11, 20 ]),
+		Unit.create("mage",    "player", false,    [ 13, 20 ]),
+		Unit.create("knight",  "enemy",  "defend", [ 12,  1 ]),
+		Unit.create("warrior", "enemy",  "defend", [ 10,  2 ]),
+		Unit.create("warrior", "enemy",  "defend", [ 14,  2 ]),
+		Unit.create("knight",  "enemy",  "defend", [ 11,  4 ]),
+		Unit.create("knight",  "enemy",  "defend", [ 12,  4 ]),
+		Unit.create("knight",  "enemy",  "defend", [ 13,  4 ]),
+		Unit.create("knight",  "enemy",  "defend", [  5,  9 ]),
+		Unit.create("knight",  "enemy",  "defend", [ 19,  9 ]),
+		Unit.create("warrior", "enemy",  "wait",   [ 13, 12 ]),
+		Unit.create("rogue",   "enemy",  "wait",   [ 11, 11 ]),
+		Unit.create("mage",    "enemy",  "attack", [ 15, 10 ]),
+		Unit.create("warrior", "enemy",  "attack", [  0, 23 ]),
+		Unit.create("warrior", "enemy",  "attack", [  2, 22 ]),
+		Unit.create("warrior", "enemy",  "attack", [ 24, 22 ]),
+		Unit.create("warrior", "enemy",  "attack", [ 22, 23 ]),
+		Unit.create("rogue",   "enemy",  "wait",   [  3, 13 ]),
+		Unit.create("rogue",   "enemy",  "wait",   [ 20, 12 ]),
+		Unit.create("warrior", "enemy",  "attack", [  2, 18 ]),
 	]
 }
 
@@ -75,7 +108,7 @@ for (let i = 0; i < map.units.length; i++) {
 
 function main(spritesheet) {
 	let sprites = disassemble(spritesheet)
-	let view = View(sprites)
+	let view = View(256, 240, sprites)
 	let canvas = view.context.canvas
 	let selecting = false
 	let strategy = null
@@ -85,7 +118,26 @@ function main(spritesheet) {
 	function loop() {
 		View.render(view, game)
 		View.update(view)
-		if (phase.faction === "enemy") {
+		if (view.cache.phase.faction === "player") {
+			if (view.mouse) {
+				let viewport = view.viewport
+				if (view.mouse[0] <= 32 && viewport.position[0] >= 0) {
+					let speed = Math.round((32 - view.mouse[0]) / 32 * 4)
+					viewport.position[0] -= speed
+				} else if (view.mouse[0] >= viewport.size[0] - 32 && viewport.position[0] + viewport.size[0] <= 400) {
+					let speed = Math.round((32 - (viewport.size[0] - view.mouse[0])) / 32 * 4)
+					viewport.position[0] += speed
+				}
+				if (view.mouse[1] <= 32 && viewport.position[1] >= 0) {
+					let speed = Math.round((32 - view.mouse[1]) / 32 * 4)
+					viewport.position[1] -= speed
+				} else if (view.mouse[1] >= viewport.size[1] - 32 && viewport.position[1] + viewport.size[1] <= 400) {
+					let speed = Math.round((32 - (viewport.size[1] - view.mouse[1])) / 32 * 4)
+					viewport.position[1] += speed
+				}
+			}
+			strategy = null
+		} else {
 			if (!strategy) {
 				let enemies = map.units.filter(unit => unit.faction === "enemy")
 				strategy = AI.analyze(map, "enemy")
@@ -127,18 +179,18 @@ function main(spritesheet) {
 					Game.endTurn(game, unit)
 				}
 			}
-		} else {
-			strategy = null
 		}
 		requestAnimationFrame(loop)
 	}
 
 	window.addEventListener("mousemove", event => {
-		let cell = [
-			Math.floor(event.offsetX / 16),
-			Math.floor(event.offsetY / 16)
-		]
 		if (event.target === canvas) {
+			let viewport = view.viewport
+			let cell = [
+				Math.floor((event.offsetX + viewport.position[0]) / 16),
+				Math.floor((event.offsetY + viewport.position[1]) / 16)
+			]
+			view.mouse = [ event.offsetX, event.offsetY ]
 			view.cursor = cell
 			let target = Map.unitAt(map, cell)
 			if (target) {
@@ -217,16 +269,20 @@ function main(spritesheet) {
 			}
 		} else {
 			view.cursor = null
+			view.mouse = null
 		}
 	})
 
 	canvas.addEventListener("mousedown", event => {
 		if (!view.cursor) {
+			let viewport = view.viewport
 			view.cursor = [
-				Math.floor(event.offsetX / 16),
-				Math.floor(event.offsetY / 16)
+				Math.floor((event.offsetX - viewport.position[0]) / 16),
+				Math.floor((event.offsetY - viewport.position[1]) / 16)
 			]
 		}
+
+		view.mouse = [ event.offsetX, event.offsetY ]
 
 		if (!view.selection) {
 			let unit = Map.unitAt(map, view.cursor)
@@ -250,11 +306,14 @@ function main(spritesheet) {
 
 	canvas.addEventListener("mouseup", event => {
 		if (!view.cursor) {
+			let viewport = view.viewport
 			view.cursor = [
-				Math.floor(event.offsetX / 16),
-				Math.floor(event.offsetY / 16)
+				Math.floor((event.offsetX - viewport.position[0]) / 16),
+				Math.floor((event.offsetY - viewport.position[1]) / 16)
 			]
 		}
+
+		view.mouse = [ event.offsetX, event.offsetY ]
 
 		let unit = view.selection
 		if (unit) {

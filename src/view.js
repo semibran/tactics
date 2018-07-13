@@ -7,13 +7,20 @@ import * as Unit from "../lib/unit"
 import * as Cell from "../lib/cell"
 import * as Game from "../lib/game"
 
-function View(sprites) {
+function View(width, height, sprites) {
 	let canvas = document.createElement("canvas")
+	canvas.width = width
+	canvas.height = height
 	return {
 		sprites: sprites,
 		context: canvas.getContext("2d"),
 		anims: [],
 		path: [],
+		viewport: {
+			size: [ width, height ],
+			position: [ 72, 160 ]
+		},
+		mouse: null,
 		cursor: null,
 		target: null,
 		selection: null,
@@ -34,13 +41,14 @@ function View(sprites) {
 			hover: { target: null, last: null },
 			range: null,
 			selection: null,
-			moving: false
+			moving: false,
+			focus: null
 		}
 	}
 }
 
 function render(view, game) {
-	let { sprites, context, anims, cursor, cache } = view
+	let { sprites, context, anims, cursor, cache, viewport } = view
 	let { map, phase } = game
 	let [ width, height ] = map.layout.size
 	let canvas = context.canvas
@@ -81,8 +89,22 @@ function render(view, game) {
 		cache.phase.next = phase.faction
 	}
 
-	canvas.width = width * 16
-	canvas.height = height * 16
+	if (view.selection) {
+		cache.focus = view.selection
+	} else if (anim && cache.phase.faction === "enemy" && anim.target.faction === "enemy") {
+		cache.focus = anim.target
+	} else {
+		cache.focus = null
+	}
+
+	if (cache.focus) {
+		let unit = cache.focus
+		let [ col, row ] = unit.cell
+		let x = (col * 16 + 8) - viewport.size[0] / 2
+		let y = (row * 16 + 8) - viewport.size[1] / 2
+		viewport.position[0] += (x - viewport.position[0]) / 16
+		viewport.position[1] += (y - viewport.position[1]) / 16
+	}
 
 	context.beginPath()
 	context.fillStyle = "black"
@@ -115,11 +137,11 @@ function render(view, game) {
 
 	let unit = view.hover.target || cache.hover.last
 	if (unit) {
-		let origin = unit.cell[0] >= 8
+		let origin = view.mouse && view.mouse[0] >= viewport.size[0] / 2
 			? -dialog.width
 			: context.canvas.width
 
-		let target = unit.cell[0] >= 8
+		let target = view.mouse && view.mouse[0] >= viewport.size[0] / 2
 			? 8
 			: context.canvas.width - dialog.width - 8
 
@@ -138,23 +160,31 @@ function render(view, game) {
 		})
 	}
 
-	for (let y = 0; y < height; y++) {
-		for (let x = 0; x < width; x++) {
-			context.drawImage(sprites.tiles.floor, x * 16, y * 16)
-		}
-	}
-
-	for (let y = 0; y < height; y++) {
-		for (let x = 0; x < width; x++) {
-			let tile = Map.tileAt(map, [ x, y ])
+	for (let row = 0; row < height; row++) {
+		for (let col = 0; col < width; col++) {
+			let tile = Map.tileAt(map, [ col, row ])
+			let x = col * 16 - viewport.position[0]
+			let y = row * 16 - viewport.position[1]
+			let sprite = null
 			if (tile.name === "wall") {
-				let sprite = sprites.tiles.wall
-				if (Map.tileAt(map, [ x, y + 1 ]) !== tile) {
+				sprite = sprites.tiles.wall
+				if (Map.tileAt(map, [ col, row + 1 ]) !== tile) {
 					sprite = sprites.tiles["wall-base"]
 				}
+			} else if (tile.name === "floor") {
+				sprite = sprites.tiles.floor
+			} else if (tile.name === "grass") {
+				sprite = sprites.tiles.grass
+			}
+			if (!tile.solid) {
+				layers.tiles.push({
+					image: sprite,
+					position: [ x, y ]
+				})
+			} else {
 				layers.walls.push({
 					image: sprite,
-					position: [ x * 16, y * 16 ]
+					position: [ x, y ]
 				})
 			}
 		}
@@ -169,7 +199,9 @@ function render(view, game) {
 		}
 
 		for (let cell of cache.range) {
-			let [ x, y ] = cell
+			let [ col, row ] = cell
+			let x = col * 16 - viewport.position[0]
+			let y = row * 16 - viewport.position[1]
 			let type = "move"
 			for (let other of map.units) {
 				if (Cell.equals(cell, other.cell)) {
@@ -187,7 +219,7 @@ function render(view, game) {
 			let sprite = sprites.ui.squares[type]
 			layers.squares.push({
 				image: sprite,
-				position: [ x * 16, y * 16 ]
+				position: [ x, y ]
 			})
 		}
 	} else {
@@ -240,7 +272,9 @@ function render(view, game) {
 			cache.phase.pending.splice(cache.phase.pending.indexOf(unit.original), 1)
 		}
 
-		let [ x, y ] = cell
+		let [ col, row ] = cell
+		let x = col * 16 - viewport.position[0]
+		let y = row * 16 - viewport.position[1]
 		if (unit.faction === cache.phase.faction
 		&& !cache.phase.pending.includes(unit.original)
 		&& !anims.find(anim => anim.target === unit.original)
@@ -255,25 +289,34 @@ function render(view, game) {
 		}
 		layers[layer].push({
 			image: sprite,
-			position: [ x * 16, y * 16 + offset ]
+			position: [ x, y + offset ]
 		})
 		layers.shadows.push({
 			image: sprites.pieces.shadow,
-			position: [ x * 16 + 1, y * 16 + 4 ]
+			position: [ x + 1, y + 4 ]
 		})
 	}
 
 	if (view.path.length) {
 		let arrow = Arrow(view.path, sprites.ui.arrows)
-		layers.arrows.push(...arrow)
+		layers.arrows.push(...arrow.map(obj => ({
+				image: obj.image,
+				position: [
+					obj.position[0] * 16 - viewport.position[0],
+					obj.position[1] * 16 - viewport.position[1]
+				]
+			})
+		))
 	}
 
 	if (cursor && (!cache.moving || cache.moving && cache.time % 2)) {
-		let [ x, y ] = cursor
+		let [ col, row ] = cursor
+		let x = col * 16 - viewport.position[0]
+		let y = row * 16 - viewport.position[1]
 		let frame = Math.floor(cache.time / 30) % sprites.ui.cursor.length
 		layers.cursor.push({
 			image: sprites.ui.cursor[frame],
-			position: [ x * 16, y * 16 ]
+			position: [ x, y ]
 		})
 	}
 
@@ -378,7 +421,7 @@ function Arrow(path, sprites) {
 			if (direction) {
 				arrow.push({
 					image: sprites[direction],
-					position: [ x * 16, y * 16 ]
+					position: [ x, y ]
 				})
 			}
 		}
