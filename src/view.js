@@ -33,7 +33,8 @@ function View(sprites) {
 			units: [],
 			hover: { target: null, last: null },
 			range: null,
-			selection: null
+			selection: null,
+			moving: false
 		}
 	}
 }
@@ -137,17 +138,9 @@ function render(view, game) {
 		})
 	}
 
-	for (let y = 0; y < height + 1; y++) {
-		for (let x = 0; x < width + 1; x++) {
+	for (let y = 0; y < height; y++) {
+		for (let x = 0; x < width; x++) {
 			context.drawImage(sprites.tiles.floor, x * 16, y * 16)
-			context.strokeStyle = cache.phase.faction === "player"
-				? "green"
-				: "maroon"
-
-			let p = Math.round(cache.time / 16) % 16
-
-			context.beginPath()
-			context.strokeRect(x * 16 - (p + 0.5), y * 16 - (p + 0.5), 16, 16)
 		}
 	}
 
@@ -172,6 +165,7 @@ function render(view, game) {
 		if (cache.selection !== unit) {
 			cache.range = range(map, unit)
 			cache.selection = unit
+			cache.selected = unit
 		}
 
 		for (let cell of cache.range) {
@@ -197,6 +191,9 @@ function render(view, game) {
 			})
 		}
 	} else {
+		if (cache.selection && anim && anim.type === "move" && anim.target === cache.selection) {
+			cache.moving = true
+		}
 		cache.range = null
 		cache.selection = null
 	}
@@ -220,6 +217,7 @@ function render(view, game) {
 				cell = anim.data.cell
 				if (anim.done) {
 					unit.cell = anim.data.cell
+					cache.moving = false
 				}
 			} else if (anim.type === "attack") {
 				cell = anim.data.cell
@@ -266,91 +264,11 @@ function render(view, game) {
 	}
 
 	if (view.path.length) {
-		let path = view.path
-		for (let i = 0; i < path.length; i++) {
-			let [ x, y ] = path[i]
-			let l = false
-			let r = false
-			let u = false
-			let d = false
-
-			let prev = path[i - 1]
-			if (prev) {
-				let dx = x - prev[0]
-				let dy = y - prev[1]
-				if (dx === 1) {
-					l = true
-				} else if (dx === -1) {
-					r = true
-				}
-
-				if (dy === 1) {
-					u = true
-				} else if (dy === -1) {
-					d = true
-				}
-			}
-
-			let next = path[i + 1]
-			if (next) {
-				let dx = next[0] - x
-				let dy = next[1] - y
-				if (dx === -1) {
-					l = true
-				} else if (dx === 1) {
-					r = true
-				}
-
-				if (dy === -1) {
-					u = true
-				} else if (dy === 1) {
-					d = true
-				}
-			}
-
-			if (l || r || u || d) {
-				let direction = null
-				if (l && r) {
-					direction = "horiz"
-				} else if (u && d) {
-					direction = "vert"
-				} else if (u && l) {
-					direction = "upLeft"
-				} else if (u && r) {
-					direction = "upRight"
-				} else if (d && l) {
-					direction = "downLeft"
-				} else if (d && r) {
-					direction = "downRight"
-				} else if (l && !i) {
-					direction = "leftStub"
-				} else if (r && !i) {
-					direction = "rightStub"
-				} else if (u && !i) {
-					direction = "upStub"
-				} else if (d && !i) {
-					direction = "downStub"
-				} else if (l) {
-					direction = "left"
-				} else if (r) {
-					direction = "right"
-				} else if (u) {
-					direction = "up"
-				} else if (d) {
-					direction = "down"
-				}
-
-				if (direction) {
-					layers.arrows.push({
-						image: sprites.ui.arrows[direction],
-						position: [ x * 16, y * 16 ]
-					})
-				}
-			}
-		}
+		let arrow = Arrow(view.path, sprites.ui.arrows)
+		layers.arrows.push(...arrow)
 	}
 
-	if (cursor) {
+	if (cursor && (!cache.moving || cache.moving && cache.time % 2)) {
 		let [ x, y ] = cursor
 		let frame = Math.floor(cache.time / 30) % sprites.ui.cursor.length
 		layers.cursor.push({
@@ -380,6 +298,92 @@ function update(view) {
 	} else {
 		Anims[anim.type].update(anim)
 	}
+}
+
+function Arrow(path, sprites) {
+	let arrow = []
+	for (let i = 0; i < path.length; i++) {
+		let [ x, y ] = path[i]
+		let l = false
+		let r = false
+		let u = false
+		let d = false
+
+		let prev = path[i - 1]
+		if (prev) {
+			let dx = x - prev[0]
+			let dy = y - prev[1]
+			if (dx === 1) {
+				l = true
+			} else if (dx === -1) {
+				r = true
+			}
+
+			if (dy === 1) {
+				u = true
+			} else if (dy === -1) {
+				d = true
+			}
+		}
+
+		let next = path[i + 1]
+		if (next) {
+			let dx = next[0] - x
+			let dy = next[1] - y
+			if (dx === -1) {
+				l = true
+			} else if (dx === 1) {
+				r = true
+			}
+
+			if (dy === -1) {
+				u = true
+			} else if (dy === 1) {
+				d = true
+			}
+		}
+
+		if (l || r || u || d) {
+			let direction = null
+			if (l && r) {
+				direction = "horiz"
+			} else if (u && d) {
+				direction = "vert"
+			} else if (u && l) {
+				direction = "upLeft"
+			} else if (u && r) {
+				direction = "upRight"
+			} else if (d && l) {
+				direction = "downLeft"
+			} else if (d && r) {
+				direction = "downRight"
+			} else if (l && !i) {
+				direction = "leftStub"
+			} else if (r && !i) {
+				direction = "rightStub"
+			} else if (u && !i) {
+				direction = "upStub"
+			} else if (d && !i) {
+				direction = "downStub"
+			} else if (l) {
+				direction = "left"
+			} else if (r) {
+				direction = "right"
+			} else if (u) {
+				direction = "up"
+			} else if (d) {
+				direction = "down"
+			}
+
+			if (direction) {
+				arrow.push({
+					image: sprites[direction],
+					position: [ x * 16, y * 16 ]
+				})
+			}
+		}
+	}
+	return arrow
 }
 
 View.render = render

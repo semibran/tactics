@@ -245,7 +245,9 @@ function ui(sprites) {
 
 		for (let y = 0; y < lines.length; y++) {
 			let line = lines[y]
-			context.drawImage(Text(line), 0, y * 8)
+			if (line.length) {
+				context.drawImage(Text(line), 0, y * 8)
+			}
 		}
 
 		box.getContext("2d")

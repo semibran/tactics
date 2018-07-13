@@ -43,16 +43,16 @@ let map = {
 		]
 	},
 	units: [
-		Unit.create("warrior", "player", [ 14, 10 ]),
-		Unit.create("rogue",   "player", [  1,  0 ]),
-		Unit.create("mage",    "player", [  8, 11 ]),
-		Unit.create("knight",  "enemy",  [  6,  1 ]),
-		Unit.create("warrior", "enemy",  [  4,  2 ]),
-		Unit.create("warrior", "enemy",  [  8,  2 ]),
-		Unit.create("mage",    "enemy",  [ 13,  1 ]),
-		Unit.create("warrior", "enemy",  [ 12,  3 ]),
-		Unit.create("knight",  "enemy",  [ 14,  5 ]),
-		Unit.create("mage",    "enemy",  [ 11,  8 ])
+		Unit.create("warrior", "player", false,    [ 14, 10 ]),
+		Unit.create("rogue",   "player", false,    [  1,  0 ]),
+		Unit.create("mage",    "player", false,    [  8, 11 ]),
+		Unit.create("knight",  "enemy",  "defend", [  6,  1 ]),
+		Unit.create("warrior", "enemy",  "wait",   [  4,  2 ]),
+		Unit.create("warrior", "enemy",  "wait",   [  8,  2 ]),
+		Unit.create("mage",    "enemy",  "wait",   [ 13,  1 ]),
+		Unit.create("warrior", "enemy",  "wait",   [ 12,  3 ]),
+		Unit.create("knight",  "enemy",  "wait",   [ 14,  5 ]),
+		Unit.create("mage",    "enemy",  "wait",   [ 11,  8 ])
 	]
 }
 
@@ -233,6 +233,7 @@ function main(spritesheet) {
 			if (unit
 			&& unit.faction === "player"
 			&& phase.faction === "player"
+			&& !view.anims.find(anim => anim.target.faction === "enemy")
 			&& phase.pending.includes(unit)
 			) {
 				selecting = true
