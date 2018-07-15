@@ -1,63 +1,85 @@
-import Anim from "./anim"
-import Anims from "./anims"
-import range from "../lib/range"
-import Canvas from "../lib/canvas"
+import * as Menu from "./menu"
 import * as Map from "../lib/map"
 import * as Unit from "../lib/unit"
 import * as Cell from "../lib/cell"
-import * as Game from "../lib/game"
+import pathfind from "../lib/pathfind"
+import Canvas from "../lib/canvas"
+import Anims from "./anims"
+import Anim from "./anim"
 
-function View(width, height, sprites) {
+const symbols = {
+	warrior: "axe",
+	knight: "shield",
+	rogue: "dagger",
+	mage: "hat"
+}
+
+export function create(width, height, sprites) {
 	let canvas = document.createElement("canvas")
 	canvas.width = width
 	canvas.height = height
+
 	return {
 		sprites: sprites,
 		context: canvas.getContext("2d"),
-		anims: [],
-		path: [],
-		viewport: {
-			size: [ width, height ],
-			position: [ 72, 160 ]
-		},
-		mouse: null,
-		cursor: null,
-		target: null,
-		selection: null,
-		hover: {
+		state: {
 			time: 0,
-			target: null,
-			dialog: null,
-			entering: false
+			anims: [],
+			cursor: {
+				cell: null,
+				prev: null,
+				selection: null
+			},
+			viewport: {
+				size: [ width, height ],
+				position: null,
+				target: null
+			}
 		},
 		cache: {
-			time: 0,
-			phase: {
-				faction: "player",
-				next: "player",
-				pending: []
-			},
-			units: [],
-			hover: { target: null, last: null },
-			range: null,
+			map: null,
 			selection: null,
-			moving: false,
-			focus: null
+			moved: null,
+			units: null,
+			ranges: [],
+			squares: [],
+			dialogs: []
 		}
 	}
 }
 
-function render(view, game) {
-	let { sprites, context, anims, cursor, cache, viewport } = view
-	let { map, phase } = game
-	let [ width, height ] = map.layout.size
+export function update(view) {
+	let { cache, state } = view
+	state.time++
+
+	let cursor = state.cursor
+	if (cursor.selection) {
+		cursor.selection.time++
+	} else if (cache.selection) {
+		cache.selection.time++
+	}
+
+	let anims = view.state.anims
+	let anim = anims[0]
+	if (!anim) return
+	if (anim.done) {
+		anims.shift()
+	} else {
+		Anims[anim.type].update(anim)
+	}
+}
+
+export function render(view, game) {
+	let { context, sprites, cache } = view
+	let { time, cursor, viewport, anims } = view.state
+	let { map } = game
 	let canvas = context.canvas
 	let anim = anims[0]
 	let order = [
-		"tiles",
+		"floors",
+		"squares",
 		"shadows",
 		"walls",
-		"squares",
 		"pieces",
 		"arrows",
 		"cursor",
@@ -70,365 +92,457 @@ function render(view, game) {
 		layers[name] = []
 	}
 
-	if (!cache.units.length) {
-		cache.units = map.units.map(unit => Object.assign({ original: unit }, unit))
-	}
-
-	if (cache.phase.pending.length < phase.pending.length && !anims.find(anim => anim.target.faction === cache.phase.faction)) {
-		cache.phase.pending = phase.pending.slice()
-	}
-
-	if (cache.phase.faction !== cache.phase.next) {
-		let anim = anims.find(anim => anim.target.faction === cache.phase.faction)
-		if (!anim || anims.indexOf(anim) > 0) {
-			cache.phase.faction = cache.phase.next
-		}
-	}
-
-	if (cache.phase.next !== phase.faction && cache.phase.faction === cache.phase.next) {
-		cache.phase.next = phase.faction
-	}
-
-	if (view.selection) {
-		cache.focus = view.selection
-	} else if (anim && cache.phase.faction === "enemy" && anim.target.faction === "enemy") {
-		cache.focus = anim.target
-	} else {
-		cache.focus = null
-	}
-
-	if (cache.focus) {
-		let unit = cache.focus
-		let [ col, row ] = unit.cell
-		let x = (col * 16 + 8) - viewport.size[0] / 2
-		let y = (row * 16 + 8) - viewport.size[1] / 2
-		viewport.position[0] += (x - viewport.position[0]) / 16
-		viewport.position[1] += (y - viewport.position[1]) / 16
-	}
-
 	context.beginPath()
 	context.fillStyle = "black"
 	context.fillRect(0, 0, canvas.width, canvas.height)
 
-	let dialog = view.hover.dialog
-	if (cache.hover.target !== view.hover.target) {
-		cache.hover.target = view.hover.target
-		let unit = view.hover.target
-		if (view.hover.entering !== !!unit) {
-			view.hover.entering = !!unit
-		}
-		if (unit) {
-			cache.hover.last = unit
-			let symbol = sprites.pieces.symbols[Game.equipment[unit.type]]
-			dialog = view.hover.dialog = sprites.ui.TextBox([
-				`  ${ unit.type.toUpperCase() }`,
-				``,
-				`HP  ${ unit.hp }/3`,
-				`STR ${ Unit.str(unit) }`,
-				`INT ${ Unit.int(unit) }`,
-				`AGI ${ Unit.agi(unit) }`,
-				`MOV ${ Unit.mov(unit) }`
-			])
+	if (!cache.units) {
+		cache.units = map.units.map(unit => Object.assign({ original: unit }, unit))
+	}
 
-			dialog.getContext("2d")
-				.drawImage(symbol, 16, 16)
+	if (!cache.map) {
+		cache.map = drawMap(map, sprites.tiles)
+	}
+
+	layers.floors.push({
+		image: cache.map.floors,
+		position: [ 0, 0 ]
+	})
+
+	layers.walls.push({
+		image: cache.map.walls,
+		position: [ 0, 0 ]
+	})
+
+	if (!cursor.cell) {
+		let unit = map.units.find(unit => unit.faction === "player")
+		cursor.cell = unit.cell.slice()
+		cursor.prev = cursor.cell.slice()
+	}
+
+	if (!viewport.target) {
+		viewport.target = []
+	}
+
+	let focus = null
+	if (!cursor.selection || cursor.selection.unit.faction !== "player" || cache.moved) {
+		focus = cursor.cell
+	} else if (cursor.selection && cursor.selection.unit.faction === "player") {
+		focus = cursor.selection.unit.cell
+	}
+
+	if (focus) {
+		viewport.target[0] = focus[0] * 16 + 8 - viewport.size[0] / 2
+		viewport.target[1] = focus[1] * 16 + 8 - viewport.size[1] / 2
+
+		let max = Map.width(map) * 16 - viewport.size[0]
+		if (viewport.target[0] < 0) {
+			viewport.target[0] = 0
+		} else if (viewport.target[0] > max) {
+			viewport.target[0] = max
+		}
+
+		let may = Map.height(map) * 16 - viewport.size[1]
+		if (viewport.target[1] < 0) {
+			viewport.target[1] = 0
+		} else if (viewport.target[1] > may) {
+			viewport.target[1] = may
 		}
 	}
 
-	let unit = view.hover.target || cache.hover.last
-	if (unit) {
-		let origin = view.mouse && view.mouse[0] >= viewport.size[0] / 2
-			? -dialog.width
-			: context.canvas.width
+	if (!viewport.position) {
+		viewport.position = viewport.target.slice()
+	} else {
+		viewport.position[0] += (viewport.target[0] - viewport.position[0]) / 16
+		viewport.position[1] += (viewport.target[1] - viewport.position[1]) / 16
+	}
 
-		let target = view.mouse && view.mouse[0] >= viewport.size[0] / 2
-			? 8
-			: context.canvas.width - dialog.width - 8
-
-		let x = origin + ((target - origin) / 8) * view.hover.time
-		let y = context.canvas.height - dialog.height - 8
-
-		if (view.hover.entering && ++view.hover.time > 8) {
-			view.hover.time = 8
-		} else if (!view.hover.entering && --view.hover.time < 0) {
-			view.hover.time = 0
+	let selection = cursor.selection || cache.selection
+	if (selection) {
+		let unit = selection.unit
+		let time = selection.time
+		let index = map.units.indexOf(unit)
+		let cached = cache.units[index]
+		let range = cache.ranges[index]
+		if (!range) {
+			range = cache.ranges[index] = Unit.range(map, unit)
 		}
+
+		let squares = cache.squares[index]
+		if (!squares) {
+			cache.squares[index] = squares = []
+			for (let cell of range.move) {
+				squares.push({
+					sprite: sprites.ui.squares.move,
+					cell: cell
+				})
+			}
+			for (let cell of range.attack) {
+				let valid = true
+				for (let other of range.move) {
+					if (Cell.equals(cell, other)) {
+						valid = false
+						break
+					}
+				}
+				if (valid) {
+					squares.push({
+						sprite: sprites.ui.squares.attack,
+						cell: cell
+					})
+				}
+			}
+		}
+
+		if (cursor.selection && cache.selection !== cursor.selection) {
+			cache.selection = selection
+			cache.path = null
+		}
+
+		if (cursor.selection && !anims.find(anim => anim.target === cached)) {
+			anims.push(Anim("lift", cached, Anims.lift()))
+		}
+
+		if (cache.selection && cache.selection !== cursor.selection) {
+			cache.moved = false
+			cache.menu = null
+			if (anim && anim.type === "lift") {
+				anim.done = true
+				anims.push(
+					Anim("drop", anim.target, Anims.drop(anim.data.height))
+				)
+				cache.selection.time = 0
+			}
+		}
+
+		let moving = anim && anim.type === "move" && anim.target === cached
+		if (!cache.moved && moving) {
+			cache.moved = true
+		}
+
+		if (!cache.moved) {
+			let radius = 0
+			if (cursor.selection) {
+				radius = selection.time
+			} else {
+				let max = 0
+				for (let square of squares) {
+					let steps = Cell.manhattan(unit.cell, square.cell)
+					if (steps > max) {
+						max = steps
+					}
+				}
+				radius = Math.max(0, max - selection.time)
+			}
+			if (radius) {
+				squares = squares.filter(square => Cell.manhattan(unit.cell, square.cell) <= radius)
+				renderSquares(layers, sprites.ui.squares, squares)
+			}
+		}
+
+		let path = cache.path
+		if (unit.faction === "player"
+		&& cursor.selection
+		&& !Cell.equals(cursor.cell, unit.cell)
+		&& range.move.find(cell => Cell.equals(cursor.cell, cell))
+		&& !Map.unitAt(map, cursor.cell)
+		) {
+			let cells = range.move.slice()
+			let allies = map.units.filter(other => Unit.allied(unit, other))
+			for (let ally of allies) {
+				cells.push(ally.cell)
+			}
+
+			if (!path) {
+				path = cache.path = pathfind(cells, unit.cell, cursor.cell)
+			} else {
+				for (var i = 0; i < path.length; i++) {
+					let cell = path[i]
+					if (Cell.equals(cursor.cell, cell)) {
+						break
+					}
+				}
+				if (i < path.length - 1) {
+					// truncate the path up to the current cell
+					path.splice(i + 1, path.length - i - 1)
+				} else {
+					let pathless = cells.filter(cell => !path.find(other => Cell.equals(cell, other)))
+					let prev = path[path.length - 1]
+					let ext = pathfind(pathless, prev, cursor.cell)
+					if (ext && path.length + ext.length - 2 <= Unit.mov(unit)) {
+						ext.shift() // exclude duplicate start cell
+						path.push(...ext)
+					} else {
+						path = cache.path = pathfind(cells, unit.cell, cursor.cell)
+					}
+				}
+			}
+		}
+
+		if (path && (cursor.selection && !cache.moved || moving && time % 2)) {
+			let arrow = sprites.ui.Arrow(path)
+			layers.arrows.push(...arrow.map(sprite => ({
+				image: sprite.image,
+				position: [ sprite.position[0] * 16, sprite.position[1] * 16 ]
+			})))
+		}
+
+		if (!cache.dialogs[index]) {
+			let nameDialog = sprites.ui.Box((unit.name.length + 1) * 8 + 20, 24)
+			let name = sprites.ui.Text(unit.name.toUpperCase())
+			let symbol = sprites.pieces.symbols[symbols[unit.type]]
+			let context = nameDialog.getContext("2d")
+			context.drawImage(symbol, 8, 8)
+			context.drawImage(name, 20, 8)
+
+			let hpDialog = sprites.ui.Box(84, 24)
+			let bar = sprites.ui.HealthBar(unit.hp / 3)
+			let label = sprites.ui.Text("HP")
+			context = hpDialog.getContext("2d")
+			context.drawImage(label, 8, 8)
+			context.drawImage(bar, 28, 8)
+
+			let y = viewport.size[1] - 68
+			if (unit.cell[1] > Map.height(map) - viewport.size[1] / 32) {
+				y = 0
+			}
+
+			cache.dialogs[index] = {
+				name: {
+					canvas: nameDialog,
+					x: -nameDialog.width,
+					y: y + 8
+				},
+				hp: {
+					canvas: hpDialog,
+					x: -hpDialog.width,
+					y: y + 36
+				}
+			}
+		}
+
+		let dialogs = cache.dialogs[index]
+		if (cursor.selection) {
+			dialogs.name.x += (8 - dialogs.name.x) / 8
+			if (cursor.selection.time >= 4) {
+				dialogs.hp.x   += (8 - dialogs.hp.x) / 8
+			}
+		} else {
+			dialogs.name.x = Math.max(-dialogs.name.canvas.width, dialogs.name.x - 16)
+			dialogs.hp.x = Math.max(-dialogs.hp.canvas.width, dialogs.hp.x - 16)
+		}
+
 
 		layers.dialogs.push({
-			image: dialog,
-			position: [ x, y ]
+			image: dialogs.name.canvas,
+			position: [ dialogs.name.x, dialogs.name.y ]
 		})
-	}
 
-	for (let row = 0; row < height; row++) {
-		for (let col = 0; col < width; col++) {
-			let tile = Map.tileAt(map, [ col, row ])
-			let x = col * 16 - viewport.position[0]
-			let y = row * 16 - viewport.position[1]
-			let sprite = null
-			if (tile.name === "wall") {
-				sprite = sprites.tiles.wall
-				if (Map.tileAt(map, [ col, row + 1 ]) !== tile) {
-					sprite = sprites.tiles["wall-base"]
-				}
-			} else if (tile.name === "floor") {
-				sprite = sprites.tiles.floor
-			} else if (tile.name === "grass") {
-				sprite = sprites.tiles.grass
-			}
-			if (!tile.solid) {
-				layers.tiles.push({
-					image: sprite,
-					position: [ x, y ]
-				})
-			} else {
-				layers.walls.push({
-					image: sprite,
-					position: [ x, y ]
-				})
-			}
-		}
-	}
+		layers.dialogs.push({
+			image: dialogs.hp.canvas,
+			position: [ dialogs.hp.x, dialogs.hp.y ]
+		})
 
-	unit = view.selection
-	if (unit) {
-		if (cache.selection !== unit) {
-			cache.range = range(map, unit)
-			cache.selection = unit
-			cache.selected = unit
-		}
-
-		for (let cell of cache.range) {
-			let [ col, row ] = cell
-			let x = col * 16 - viewport.position[0]
-			let y = row * 16 - viewport.position[1]
-			let type = "move"
-			for (let other of map.units) {
-				if (Cell.equals(cell, other.cell)) {
-					if (!Unit.allied(unit, other)) {
-						type = "attack"
-					} else {
-						type = "ally"
-					}
+		if (cache.moved && !moving && !cache.menu) {
+			let options = null
+			let neighbors = Cell.neighborhood(cached.cell, cached.equipment.weapon.rng)
+			let enemy = null
+			for (let neighbor of neighbors) {
+				let other = Map.unitAt(map, neighbor)
+				if (other && !Unit.allied(unit, other)) {
+					enemy = other
 					break
 				}
 			}
-			if (type !== "move" && type !== "attack") {
-				continue
+			if (enemy) {
+				options = [ "attack", "wait" ]
+			} else {
+				options = [ "wait" ]
 			}
-			let sprite = sprites.ui.squares[type]
-			layers.squares.push({
+			cache.menu = Menu.create(options)
+		}
+	}
+
+	let menu = cache.menu
+	if (menu) {
+		if (menu.selection) {
+			let unit = cursor.selection.unit
+			let index = map.units.indexOf(unit)
+			let cached = cache.units[index]
+			unit.cell = cached.cell
+			cursor.selection = null
+			cache.selection = null
+			cache.squares.length = 0
+			cache.ranges.length = 0
+			cache.menu = null
+			cache.moved = false
+			anim.done = true
+			anims.push(
+				Anim("drop", anim.target, Anims.drop(anim.data.height))
+			)
+		} else {
+			let longest = ""
+			for (let text of menu.options) {
+				if (text.length > longest.length) {
+					longest = text
+				}
+			}
+
+			let dialog = sprites.ui.Box(longest.length * 8 + 36, menu.options.length * 16 + 16)
+			let context = dialog.getContext("2d")
+			for (let i = 0; i < menu.options.length; i++) {
+				let text = menu.options[i]
+				let label = sprites.ui.Text(text.toUpperCase())
+				context.drawImage(label, 24, 12 + i * 16)
+			}
+
+			let symbol = null
+			if (menu.options[menu.index] === "attack") {
+				symbol = sprites.pieces.symbols.sword
+			} else if (menu.options[menu.index] === "wait") {
+				symbol = sprites.pieces.symbols.clock
+			}
+
+			let frame = (time % 180) / 180
+			context.drawImage(symbol, 12, 12 + menu.index * 16 - Math.sin(2 * Math.PI * frame * 2))
+
+			layers.dialogs.push({
+				image: dialog,
+				position: [ 144, 32 ]
+			})
+		}
+	} else {
+		renderCursor(layers, sprites.ui.cursor, cursor, view)
+	}
+
+	renderUnits(layers, sprites.pieces, map, view)
+	renderLayers(layers, order, viewport, context)
+}
+
+function renderSquares(layers, sprites, squares) {
+	for (let square of squares) {
+		let sprite = square.sprite
+		let x = square.cell[0] * 16
+		let y = square.cell[1] * 16
+		layers.squares.push({
+			image: sprite,
+			position: [ x, y ]
+		})
+	}
+}
+
+function drawMap(map, sprites) {
+	let cols = Map.width(map)
+	let rows = Map.height(map)
+	let floors = Canvas(cols * 16, rows * 16)
+	let walls = Canvas(cols * 16, rows * 16)
+	for (let row = 0; row < rows; row++) {
+		for (let col = 0; col < cols; col++) {
+			let x = col * 16
+			let y = row * 16
+			let tile = Map.tileAt(map, [ col, row ])
+			let sprite = null
+			if (tile.name === "wall") {
+				if (row + 1 < rows && Map.tileAt(map, [ col, row + 1 ]).name !== "wall") {
+					sprite = sprites["wall-base"]
+				} else {
+					sprite = sprites.wall
+				}
+				walls.drawImage(sprite, x, y)
+			} else {
+				sprite = sprites[tile.name]
+				floors.drawImage(sprite, x, y)
+			}
+		}
+	}
+	return {
+		floors: floors.canvas,
+		walls: walls.canvas
+	}
+}
+
+function renderUnits(layers, sprites, map, view) {
+	let cache = view.cache
+	let anims = view.state.anims
+	let anim = anims[0]
+	for (let i = 0; i < cache.units.length; i++) {
+		let unit = cache.units[i]
+		let real = map.units[i]
+		let cell = unit.cell
+		let sprite = sprites[unit.faction][symbols[unit.type]]
+		let x = cell[0] * 16
+		let y = cell[1] * 16
+		let z = 0
+		if (!Cell.equals(unit.cell, real.cell)
+		&& !cache.moved
+		) {
+			anim.done = true
+			anims.push(
+				Anim("move", unit, Anims.move(cache.path))
+			)
+		}
+		if (anim && anim.target === unit) {
+			if ([ "lift", "drop" ].includes(anim.type)) {
+				z = anim.data.height
+			} else if (anim.type === "move") {
+				x = anim.data.cell[0] * 16
+				y = anim.data.cell[1] * 16
+			}
+			layers.selection.push({
+				image: sprite,
+				position: [ x, y - z ]
+			})
+		} else {
+			layers.pieces.push({
 				image: sprite,
 				position: [ x, y ]
 			})
 		}
-	} else {
-		if (cache.selection && anim && anim.type === "move" && anim.target === cache.selection) {
-			cache.moving = true
-		}
-		cache.range = null
-		cache.selection = null
-	}
-
-	for (let i = 0; i < cache.units.length; i++) {
-		let unit = cache.units[i]
-		let symbol = {
-			warrior: "axe",
-			knight: "shield",
-			rogue: "dagger",
-			mage: "hat"
-		}[unit.type]
-
-		let sprite = sprites.pieces[unit.faction][symbol]
-		let cell = unit.cell
-		let offset = 0
-		if (anim && unit.original === anim.target) {
-			if (anim.type === "lift" || anim.type === "float" || anim.type === "drop") {
-				offset = -anim.data.height
-			} else if (anim.type === "move") {
-				cell = anim.data.cell
-				if (anim.done) {
-					unit.cell = anim.data.cell
-					cache.moving = false
-				}
-			} else if (anim.type === "attack") {
-				cell = anim.data.cell
-			} else if (anim.type === "flinch") {
-				if (anim.data.flashing) {
-					sprite = sprites.pieces.flashing
-				}
-			} else if (anim.type === "fade") {
-				if (anim.done) {
-					cache.units.splice(i--, 1)
-					continue
-				} else if (!anim.data.visible) {
-					continue
-				}
-			}
-		} else if (cache.phase.pending.includes(unit.original)
-		&& !phase.pending.includes(unit.original)
-		&& !anims.length // find(anim => anim.target === unit)
-		) {
-			cache.phase.pending.splice(cache.phase.pending.indexOf(unit.original), 1)
-		}
-
-		let [ col, row ] = cell
-		let x = col * 16 - viewport.position[0]
-		let y = row * 16 - viewport.position[1]
-		if (unit.faction === cache.phase.faction
-		&& !cache.phase.pending.includes(unit.original)
-		&& !anims.find(anim => anim.target === unit.original)
-		) {
-			sprite = sprites.pieces.done[unit.faction][symbol]
-		}
-		let layer = "pieces"
-		if (unit.original === view.selection
-		|| anims.find(anim => [ "lift", "float", "drop", "attack" ].includes(anim.type) && anim.target === unit.original)
-		) {
-			layer = "selection"
-		}
-		layers[layer].push({
-			image: sprite,
-			position: [ x, y + offset ]
-		})
 		layers.shadows.push({
-			image: sprites.pieces.shadow,
+			image: sprites.shadow,
 			position: [ x + 1, y + 4 ]
 		})
 	}
+}
 
-	if (view.path.length) {
-		let arrow = Arrow(view.path, sprites.ui.arrows)
-		layers.arrows.push(...arrow.map(obj => ({
-				image: obj.image,
-				position: [
-					obj.position[0] * 16 - viewport.position[0],
-					obj.position[1] * 16 - viewport.position[1]
-				]
-			})
-		))
+function renderCursor(layers, sprites, cursor, view) {
+	let time = view.state.time
+	let cache = view.cache
+	let dx = cursor.cell[0] - cursor.prev[0]
+	let dy = cursor.cell[1] - cursor.prev[1]
+	let d = Math.abs(dx) + Math.abs(dy)
+	cursor.prev[0] += dx / 4
+	cursor.prev[1] += dy / 4
+
+	let frame = 0
+	if (cursor.selection) {
+		frame = 1
+	} else if (d < 1e-3) {
+		frame = Math.floor(time / 30) % 2
 	}
 
-	if (cursor && (!cache.moving || cache.moving && cache.time % 2)) {
-		let [ col, row ] = cursor
-		let x = col * 16 - viewport.position[0]
-		let y = row * 16 - viewport.position[1]
-		let frame = Math.floor(cache.time / 30) % sprites.ui.cursor.length
-		layers.cursor.push({
-			image: sprites.ui.cursor[frame],
-			position: [ x, y ]
-		})
-	}
+	let x = cursor.prev[0] * 16
+	let y = cursor.prev[1] * 16
+	let sprite = sprites[frame]
+	layers.cursor.push({
+		image: sprite,
+		position: [ x, y ]
+	})
+}
 
+function renderLayers(layers, order, viewport, context) {
 	for (let name of order) {
 		let layer = layers[name]
 		layer.sort((a, b) => a.position[1] - b.position[1])
 
 		for (let element of layer) {
-			let [ x, y, z ] = element.position
-			context.drawImage(element.image, Math.round(x), Math.round(y))
+			let x = Math.round(element.position[0])
+			let y = Math.round(element.position[1] - (element.position[2] || 0))
+			if (name !== "dialogs") {
+				x -= viewport.position[0]
+				y -= viewport.position[1]
+			}
+			context.drawImage(element.image, x, y)
 		}
 	}
 }
-
-function update(view) {
-	view.cache.time++
-	let anims = view.anims
-	let anim = anims[0]
-	if (!anim) return
-	if (anim.done) {
-		anims.shift()
-	} else {
-		Anims[anim.type].update(anim)
-	}
-}
-
-function Arrow(path, sprites) {
-	let arrow = []
-	for (let i = 0; i < path.length; i++) {
-		let [ x, y ] = path[i]
-		let l = false
-		let r = false
-		let u = false
-		let d = false
-
-		let prev = path[i - 1]
-		if (prev) {
-			let dx = x - prev[0]
-			let dy = y - prev[1]
-			if (dx === 1) {
-				l = true
-			} else if (dx === -1) {
-				r = true
-			}
-
-			if (dy === 1) {
-				u = true
-			} else if (dy === -1) {
-				d = true
-			}
-		}
-
-		let next = path[i + 1]
-		if (next) {
-			let dx = next[0] - x
-			let dy = next[1] - y
-			if (dx === -1) {
-				l = true
-			} else if (dx === 1) {
-				r = true
-			}
-
-			if (dy === -1) {
-				u = true
-			} else if (dy === 1) {
-				d = true
-			}
-		}
-
-		if (l || r || u || d) {
-			let direction = null
-			if (l && r) {
-				direction = "horiz"
-			} else if (u && d) {
-				direction = "vert"
-			} else if (u && l) {
-				direction = "upLeft"
-			} else if (u && r) {
-				direction = "upRight"
-			} else if (d && l) {
-				direction = "downLeft"
-			} else if (d && r) {
-				direction = "downRight"
-			} else if (l && !i) {
-				direction = "leftStub"
-			} else if (r && !i) {
-				direction = "rightStub"
-			} else if (u && !i) {
-				direction = "upStub"
-			} else if (d && !i) {
-				direction = "downStub"
-			} else if (l) {
-				direction = "left"
-			} else if (r) {
-				direction = "right"
-			} else if (u) {
-				direction = "up"
-			} else if (d) {
-				direction = "down"
-			}
-
-			if (direction) {
-				arrow.push({
-					image: sprites[direction],
-					position: [ x, y ]
-				})
-			}
-		}
-	}
-	return arrow
-}
-
-View.render = render
-View.update = update
-export default View

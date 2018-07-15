@@ -146,6 +146,7 @@ function ui(sprites) {
 		swords:  sprites.swords,
 		cursor:  cursor(sprites.cursor),
 		typeface: typeface(sprites.typeface),
+		healthbar: sprites.healthbar,
 		box: {
 			topLeft:     extract(sprites.box,  0,  0, 16, 16),
 			top:         extract(sprites.box, 16,  0, 16, 16),
@@ -182,6 +183,8 @@ function ui(sprites) {
 	ui.Text = Text
 	ui.Box = Box
 	ui.TextBox = TextBox
+	ui.HealthBar = HealthBar
+	ui.Arrow = Arrow
 
 	return ui
 
@@ -237,11 +240,8 @@ function ui(sprites) {
 		const width   = longest * 8
 		const height  = lines.length * 8
 
-		let box = Box(width + 32, height + 32)
-		let canvas = document.createElement("canvas")
-		let context = canvas.getContext("2d")
-		canvas.width = width
-		canvas.height = height
+		let box = Box(width + 16, height + 16)
+		let context = Canvas(width, height)
 
 		for (let y = 0; y < lines.length; y++) {
 			let line = lines[y]
@@ -251,9 +251,103 @@ function ui(sprites) {
 		}
 
 		box.getContext("2d")
-			.drawImage(canvas, 16, 16)
+			.drawImage(context.canvas, 8, 8)
 
 		return box
+	}
+
+	function HealthBar(content) {
+		let context = Canvas(48, 8)
+		context.drawImage(ui.healthbar, 0, 0)
+		context.fillStyle = `rgba(203, 243, 130, 255)`
+		context.fillRect(3, 3, Math.floor(content * 42), 2)
+		return context.canvas
+	}
+
+	function Arrow(path) {
+		let arrow = []
+		for (let i = 0; i < path.length; i++) {
+			let [ x, y ] = path[i]
+			let l = false
+			let r = false
+			let u = false
+			let d = false
+
+			let prev = path[i - 1]
+			if (prev) {
+				let dx = x - prev[0]
+				let dy = y - prev[1]
+				if (dx === 1) {
+					l = true
+				} else if (dx === -1) {
+					r = true
+				}
+
+				if (dy === 1) {
+					u = true
+				} else if (dy === -1) {
+					d = true
+				}
+			}
+
+			let next = path[i + 1]
+			if (next) {
+				let dx = next[0] - x
+				let dy = next[1] - y
+				if (dx === -1) {
+					l = true
+				} else if (dx === 1) {
+					r = true
+				}
+
+				if (dy === -1) {
+					u = true
+				} else if (dy === 1) {
+					d = true
+				}
+			}
+
+			if (l || r || u || d) {
+				let direction = null
+				if (l && r) {
+					direction = "horiz"
+				} else if (u && d) {
+					direction = "vert"
+				} else if (u && l) {
+					direction = "upLeft"
+				} else if (u && r) {
+					direction = "upRight"
+				} else if (d && l) {
+					direction = "downLeft"
+				} else if (d && r) {
+					direction = "downRight"
+				} else if (l && !i) {
+					direction = "leftStub"
+				} else if (r && !i) {
+					direction = "rightStub"
+				} else if (u && !i) {
+					direction = "upStub"
+				} else if (d && !i) {
+					direction = "downStub"
+				} else if (l) {
+					direction = "left"
+				} else if (r) {
+					direction = "right"
+				} else if (u) {
+					direction = "up"
+				} else if (d) {
+					direction = "down"
+				}
+
+				if (direction) {
+					arrow.push({
+						image: ui.arrows[direction],
+						position: [ x, y ]
+					})
+				}
+			}
+		}
+		return arrow
 	}
 }
 
