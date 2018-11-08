@@ -90,7 +90,11 @@ export function update(cursor, keys, game, view) {
 	let unit = Map.unitAt(map, cursor.cell)
 	if (unit) {
 		if (!cursor.under || unit !== cursor.under.unit) {
-			cursor.under = { unit, time: 0 }
+			if (!cursor.under && view.cache.selected && view.cache.selected.unit === unit) {
+				cursor.under = view.cache.selected
+			} else {
+				cursor.under = { unit, time: 0 }
+			}
 		} else {
 			cursor.under.time++
 		}
