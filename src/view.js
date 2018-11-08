@@ -337,18 +337,20 @@ export function render(view, game) {
 		let index = map.units.indexOf(unit)
 		if (!cache.dialogs[index]) {
 			let nameDialog = sprites.ui.Box((unit.name.length + 1) * 8 + 20, 24)
-			let name = sprites.ui.Text(unit.name.toUpperCase())
+			let name = sprites.ui.Text(unit.name)
 			let symbol = sprites.pieces.symbols[symbols[unit.type]]
 			let context = nameDialog.getContext("2d")
 			context.drawImage(symbol, 8, 8)
 			context.drawImage(name, 20, 8)
 
 			let hpDialog = sprites.ui.Box(84, 24)
-			let bar = sprites.ui.HealthBar(unit.hp / 3)
+			let bar = sprites.ui.HealthBar(unit.hp / 3, unit.faction)
 			let label = sprites.ui.Text("HP")
+			// let value = sprites.ui.Text(`${unit.hp}/3`)
 			context = hpDialog.getContext("2d")
 			context.drawImage(label, 8, 8)
 			context.drawImage(bar, 28, 8)
+			// context.drawImage(value, 80, 8)
 
 			let y = viewport.size[1] - 68
 			if (unit.cell[1] > Map.height(map) - viewport.size[1] / 32) {
@@ -371,8 +373,10 @@ export function render(view, game) {
 
 		let dialogs = cache.dialogs[index]
 		if (selected) {
-			dialogs.name.x += (8 - dialogs.name.x) / 8
-			if (selected.time >= 4) {
+			if (selected.time >= 12) {
+				dialogs.name.x += (8 - dialogs.name.x) / 8
+			}
+			if (selected.time >= 16) {
 				dialogs.hp.x += (8 - dialogs.hp.x) / 8
 			}
 		}
@@ -390,7 +394,10 @@ export function render(view, game) {
 		let unit = cache.selected.unit
 		let index = map.units.indexOf(unit)
 		let dialogs = cache.dialogs[index]
-		if (dialogs.name.x > -dialogs.name.canvas.width) {
+		// move dialogs out of view
+		if (dialogs.name.x > -dialogs.name.canvas.width
+		|| dialogs.hp.x > -dialogs.hp.canvas.width
+		) {
 			dialogs.name.x -= 16
 			dialogs.hp.x -= 16
 		} else {

@@ -256,10 +256,16 @@ function ui(sprites) {
 		return box
 	}
 
-	function HealthBar(content) {
+	function HealthBar(content, faction) {
+		let palette = {
+			player: "rgb(144, 224, 232)",
+			enemy:  "rgb(248, 192, 224)",
+			ally:   "rgb(200, 224, 255)",
+		}
 		let context = Canvas(48, 8)
 		context.drawImage(ui.healthbar, 0, 0)
-		context.fillStyle = `rgba(203, 243, 130, 255)`
+		context.fillStyle = palette[faction]
+		// context.fillRect(2, 2, Math.floor(content * 44), 4)
 		context.fillRect(3, 3, Math.floor(content * 42), 2)
 		return context.canvas
 	}
