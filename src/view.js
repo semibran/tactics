@@ -562,9 +562,7 @@ function renderUnits(layers, sprites, game, view) {
 		&& !cache.moved
 		) {
 			anim.done = true
-			anims.push(
-				Anim("move", unit, Anims.move(cache.path))
-			)
+			anim = anims[0] = Anim("move", unit, Anims.move(cache.path))
 		}
 		if (anim && anim.target === unit) {
 			if ([ "lift", "drop" ].includes(anim.type)) {

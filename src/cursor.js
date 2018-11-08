@@ -17,7 +17,7 @@ export function update(cursor, keys, game, view) {
 			}
 		} else {
 			let unit = cursor.selection.unit
-			if (unit.faction === "player" && game.phase.pending.includes(unit)) {
+			if (phase.pending.includes(unit)) {
 				let index = map.units.indexOf(unit)
 				let cached = view.cache.units[index]
 				let range = view.cache.ranges[index]
@@ -30,16 +30,61 @@ export function update(cursor, keys, game, view) {
 		}
 	}
 
-	if ((held.left && !prev.left || held.left > delay && !(held.left % interval)) && !held.right) {
-		move(cursor, "left", map)
-	} else if ((held.right && !prev.right || held.right > delay && !(held.right % interval)) && !held.left) {
-		move(cursor, "right", map)
-	}
+	if (!held.mod) {
+		if ((held.left && !prev.left || held.left > delay && !(held.left % interval)) && !held.right) {
+			move(cursor, "left", map)
+		} else if ((held.right && !prev.right || held.right > delay && !(held.right % interval)) && !held.left) {
+			move(cursor, "right", map)
+		}
 
-	if ((held.up && !prev.up || held.up > delay && !(held.up % interval)) && !held.down) {
-		move(cursor, "up", map)
-	} else if ((held.down && !prev.down || held.down > delay && !(held.down % interval)) && !held.up) {
-		move(cursor, "down", map)
+		if ((held.up && !prev.up || held.up > delay && !(held.up % interval)) && !held.down) {
+			move(cursor, "up", map)
+		} else if ((held.down && !prev.down || held.down > delay && !(held.down % interval)) && !held.up) {
+			move(cursor, "down", map)
+		}
+	} else if (cursor.selection && phase.pending.includes(cursor.selection.unit)) {
+		let unit = cursor.selection.unit
+		let index = map.units.indexOf(unit)
+		let range = view.cache.ranges[index]
+		let [ x, y ] = cursor.cell
+		if (held.left && !prev.left && !held.right) {
+			let [ x, y ] = cursor.cell
+			for (let i = 0; i < range.move.length; i++) {
+				let cell = range.move[i]
+				if (cell[1] === y && cell[0] < x) {
+					x = cell[0]
+				}
+			}
+			cursor.cell[0] = x
+		} else if (held.right && !prev.right && !held.left) {
+			let [ x, y ] = cursor.cell
+			for (let i = 0; i < range.move.length; i++) {
+				let cell = range.move[i]
+				if (cell[1] === y && cell[0] > x) {
+					x = cell[0]
+				}
+			}
+			cursor.cell[0] = x
+		}
+		if (held.up && !prev.up && !held.down) {
+			let [ x, y ] = cursor.cell
+			for (let i = 0; i < range.move.length; i++) {
+				let cell = range.move[i]
+				if (cell[0] === x && cell[1] < y) {
+					y = cell[1]
+				}
+			}
+			cursor.cell[1] = y
+		} else if (held.down && !prev.down && !held.up) {
+			let [ x, y ] = cursor.cell
+			for (let i = 0; i < range.move.length; i++) {
+				let cell = range.move[i]
+				if (cell[0] === x && cell[1] > y) {
+					y = cell[1]
+				}
+			}
+			cursor.cell[1] = y
+		}
 	}
 
 	let unit = Map.unitAt(map, cursor.cell)
