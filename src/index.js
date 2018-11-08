@@ -26,9 +26,9 @@ function main(spritesheet) {
 		let cursor = view.state.cursor
 		let menu = view.cache.menu
 		if (menu) {
-			Menu.update(menu, keys)
+			Menu.update(menu.data, keys)
 		} else {
-			Cursor.update(cursor, keys, game.map, view)
+			Cursor.update(cursor, keys, game, view)
 		}
 
 		let { held, prev } = keys

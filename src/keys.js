@@ -18,5 +18,6 @@ export const controls = {
 	down:    [ "KeyS" ],
 	confirm: [ "Space" ],
 	cancel:  [ "Escape" ],
-	select:  [ "Tab" ]
+	select:  [ "Tab" ],
+	mod:     [ "ShiftLeft" ]
 }

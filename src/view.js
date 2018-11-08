@@ -28,7 +28,8 @@ export function create(width, height, sprites) {
 			cursor: {
 				cell: null,
 				prev: null,
-				selection: null
+				selection: null,
+				under: null
 			},
 			viewport: {
 				size: [ width, height ],
@@ -39,11 +40,13 @@ export function create(width, height, sprites) {
 		cache: {
 			map: null,
 			selection: null,
+			selected: null,
 			moved: null,
 			units: null,
 			ranges: [],
 			squares: [],
-			dialogs: []
+			dialogs: [],
+			dialog: null
 		}
 	}
 }
@@ -125,9 +128,9 @@ export function render(view, game) {
 	}
 
 	let focus = null
-	if (!cursor.selection || cursor.selection.unit.faction !== "player" || cache.moved) {
+	if (!cursor.selection || !game.phase.pending.includes(cursor.selection.unit) || cache.moved) {
 		focus = cursor.cell
-	} else if (cursor.selection && cursor.selection.unit.faction === "player") {
+	} else if (cursor.selection && game.phase.pending.includes(cursor.selection.unit)) {
 		focus = cursor.selection.unit.cell
 	}
 
@@ -155,6 +158,16 @@ export function render(view, game) {
 	} else {
 		viewport.position[0] += (viewport.target[0] - viewport.position[0]) / 16
 		viewport.position[1] += (viewport.target[1] - viewport.position[1]) / 16
+	}
+
+	if (true) {
+		let position = cursor.cell.map(free)
+		let relative = [
+			position[0] - viewport.position[0],
+			position[1] - viewport.position[1]
+		]
+
+		// console.log(relative.map(snap))
 	}
 
 	let selection = cursor.selection || cache.selection
@@ -241,9 +254,12 @@ export function render(view, game) {
 		}
 
 		let path = cache.path
-		if (unit.faction === "player"
+		if (Cell.equals(cursor.cell, unit.cell)) {
+			if (path) {
+				path.length = 1
+			}
+		} else if (game.phase.pending.includes(unit)
 		&& cursor.selection
-		&& !Cell.equals(cursor.cell, unit.cell)
 		&& range.move.find(cell => Cell.equals(cursor.cell, cell))
 		&& !Map.unitAt(map, cursor.cell)
 		) {
@@ -287,6 +303,38 @@ export function render(view, game) {
 			})))
 		}
 
+		if (cache.moved && !moving && !cache.menu) {
+			let options = null
+			let neighbors = Cell.neighborhood(cached.cell, cached.equipment.weapon.rng)
+			let enemy = null
+			for (let neighbor of neighbors) {
+				let other = Map.unitAt(map, neighbor)
+				if (other && !Unit.allied(unit, other)) {
+					enemy = other
+					break
+				}
+			}
+			if (enemy) {
+				options = [ "attack", "wait" ]
+			} else {
+				options = [ "wait" ]
+			}
+			cache.menu = {
+				data: Menu.create(options),
+				box: null,
+				size: [ 16, 16 ],
+				targetSize: null
+			}
+		}
+	}
+
+	let selected = cursor.selection || cursor.under
+	if (selected && !(cache.selected && selected !== cache.selected)) {
+		if (!cache.selected) {
+			cache.selected = selected
+		}
+		let unit = selected.unit
+		let index = map.units.indexOf(unit)
 		if (!cache.dialogs[index]) {
 			let nameDialog = sprites.ui.Box((unit.name.length + 1) * 8 + 20, 24)
 			let name = sprites.ui.Text(unit.name.toUpperCase())
@@ -322,16 +370,12 @@ export function render(view, game) {
 		}
 
 		let dialogs = cache.dialogs[index]
-		if (cursor.selection) {
+		if (selected) {
 			dialogs.name.x += (8 - dialogs.name.x) / 8
-			if (cursor.selection.time >= 4) {
-				dialogs.hp.x   += (8 - dialogs.hp.x) / 8
+			if (selected.time >= 4) {
+				dialogs.hp.x += (8 - dialogs.hp.x) / 8
 			}
-		} else {
-			dialogs.name.x = Math.max(-dialogs.name.canvas.width, dialogs.name.x - 16)
-			dialogs.hp.x = Math.max(-dialogs.hp.canvas.width, dialogs.hp.x - 16)
 		}
-
 
 		layers.dialogs.push({
 			image: dialogs.name.canvas,
@@ -342,30 +386,31 @@ export function render(view, game) {
 			image: dialogs.hp.canvas,
 			position: [ dialogs.hp.x, dialogs.hp.y ]
 		})
-
-		if (cache.moved && !moving && !cache.menu) {
-			let options = null
-			let neighbors = Cell.neighborhood(cached.cell, cached.equipment.weapon.rng)
-			let enemy = null
-			for (let neighbor of neighbors) {
-				let other = Map.unitAt(map, neighbor)
-				if (other && !Unit.allied(unit, other)) {
-					enemy = other
-					break
-				}
-			}
-			if (enemy) {
-				options = [ "attack", "wait" ]
-			} else {
-				options = [ "wait" ]
-			}
-			cache.menu = Menu.create(options)
+	} else if (cache.selected) {
+		let unit = cache.selected.unit
+		let index = map.units.indexOf(unit)
+		let dialogs = cache.dialogs[index]
+		if (dialogs.name.x > -dialogs.name.canvas.width) {
+			dialogs.name.x -= 16
+			dialogs.hp.x -= 16
+		} else {
+			cache.selected = null
 		}
+
+		layers.dialogs.push({
+			image: dialogs.name.canvas,
+			position: [ dialogs.name.x, dialogs.name.y ]
+		})
+
+		layers.dialogs.push({
+			image: dialogs.hp.canvas,
+			position: [ dialogs.hp.x, dialogs.hp.y ]
+		})
 	}
 
 	let menu = cache.menu
 	if (menu) {
-		if (menu.selection) {
+		if (menu.data.selection) {
 			let unit = cursor.selection.unit
 			let index = map.units.indexOf(unit)
 			let cached = cache.units[index]
@@ -380,43 +425,65 @@ export function render(view, game) {
 			anims.push(
 				Anim("drop", anim.target, Anims.drop(anim.data.height))
 			)
+			let jndex = game.phase.pending.indexOf(unit)
+			game.phase.pending.splice(jndex, 1)
 		} else {
-			let longest = ""
-			for (let text of menu.options) {
-				if (text.length > longest.length) {
-					longest = text
+			if (!menu.targetSize) {
+				let longest = ""
+				for (let text of menu.data.options) {
+					if (text.length > longest.length) {
+						longest = text
+					}
 				}
+				menu.targetSize = [
+					longest.length * 8 + 36,
+					menu.data.options.length * 16 + 16
+				]
 			}
+			menu.size[0] += (menu.targetSize[0] - menu.size[0]) / 4
+			menu.size[1] += (menu.targetSize[1] - menu.size[1]) / 4
+			let box = sprites.ui.Box(...menu.size.map(Math.round))
+			if (menu.targetSize[0] - menu.size[0] < 4) {
+				let context = box.getContext("2d")
+				for (let i = 0; i < menu.data.options.length; i++) {
+					let text = menu.data.options[i]
+					let label = sprites.ui.Text(text.toUpperCase())
+					context.drawImage(label, 24, 12 + i * 16)
+				}
 
-			let dialog = sprites.ui.Box(longest.length * 8 + 36, menu.options.length * 16 + 16)
-			let context = dialog.getContext("2d")
-			for (let i = 0; i < menu.options.length; i++) {
-				let text = menu.options[i]
-				let label = sprites.ui.Text(text.toUpperCase())
-				context.drawImage(label, 24, 12 + i * 16)
+				let symbol = null
+				let option = menu.data.options[menu.data.index]
+				if (option === "attack") {
+					symbol = sprites.pieces.symbols.sword
+				} else if (option === "wait") {
+					symbol = sprites.pieces.symbols.clock
+				}
+
+				let frame = (time % 180) / 180
+				context.drawImage(symbol, 12, 12 + menu.data.index * 16 - Math.sin(2 * Math.PI * frame * 2))
 			}
-
-			let symbol = null
-			if (menu.options[menu.index] === "attack") {
-				symbol = sprites.pieces.symbols.sword
-			} else if (menu.options[menu.index] === "wait") {
-				symbol = sprites.pieces.symbols.clock
-			}
-
-			let frame = (time % 180) / 180
-			context.drawImage(symbol, 12, 12 + menu.index * 16 - Math.sin(2 * Math.PI * frame * 2))
 
 			layers.dialogs.push({
-				image: dialog,
+				image: box,
 				position: [ 144, 32 ]
 			})
 		}
-	} else {
+	}
+
+	if (!menu && !cache.moved) {
 		renderCursor(layers, sprites.ui.cursor, cursor, view)
 	}
 
-	renderUnits(layers, sprites.pieces, map, view)
+	renderUnits(layers, sprites.pieces, game, view)
 	renderLayers(layers, order, viewport, context)
+}
+
+function free(col) {
+	return (col + 0.5) * 16
+}
+
+function snap(x) {
+	return Math.floor(x / 16)
 }
 
 function renderSquares(layers, sprites, squares) {
@@ -449,6 +516,17 @@ function drawMap(map, sprites) {
 					sprite = sprites.wall
 				}
 				walls.drawImage(sprite, x, y)
+			} else if (tile.name === "grass") {
+				if (col - 1 >= 0 && Map.tileAt(map, [ col - 1, row ]).name === "wall"
+				&& row - 1 >= 0 && Map.tileAt(map, [ col - 1, row - 1 ]).name !== "wall"
+				) {
+					sprite = sprites["grass-base-corner"]
+				} else if (col - 1 >= 0 && Map.tileAt(map, [ col - 1, row ]).name === "wall") {
+					sprite = sprites["grass-base"]
+				} else {
+					sprite = sprites.grass
+				}
+				floors.drawImage(sprite, x, y)
 			} else {
 				sprite = sprites[tile.name]
 				floors.drawImage(sprite, x, y)
@@ -461,7 +539,9 @@ function drawMap(map, sprites) {
 	}
 }
 
-function renderUnits(layers, sprites, map, view) {
+function renderUnits(layers, sprites, game, view) {
+	let map = game.map
+	let phase = game.phase
 	let cache = view.cache
 	let anims = view.state.anims
 	let anim = anims[0]
@@ -469,10 +549,15 @@ function renderUnits(layers, sprites, map, view) {
 		let unit = cache.units[i]
 		let real = map.units[i]
 		let cell = unit.cell
-		let sprite = sprites[unit.faction][symbols[unit.type]]
 		let x = cell[0] * 16
 		let y = cell[1] * 16
 		let z = 0
+		let sprite = sprites[unit.faction][symbols[unit.type]]
+		if (!game.phase.pending.includes(real)
+		&& game.phase.faction === unit.faction
+		) {
+			sprite = sprites.done[unit.faction][symbols[unit.type]]
+		}
 		if (!Cell.equals(unit.cell, real.cell)
 		&& !cache.moved
 		) {
