@@ -523,31 +523,20 @@ function drawMap(map, sprites) {
 					sprite = sprites.wall
 				}
 				walls.drawImage(sprite, x, y)
-			} else if (tile.name === "grass") {
-				if (col - 1 >= 0 && Map.tileAt(map, [ col - 1, row ]).name === "wall"
-				&& row - 1 >= 0 && Map.tileAt(map, [ col - 1, row - 1 ]).name !== "wall"
-				) {
-					sprite = sprites["grass-base-corner"]
-				} else if (col - 1 >= 0 && Map.tileAt(map, [ col - 1, row ]).name === "wall") {
-					sprite = sprites["grass-base"]
-				} else {
-					sprite = sprites.grass
-				}
-				floors.drawImage(sprite, x, y)
-			} else if (tile.name === "floor") {
-				if (col - 1 >= 0 && Map.tileAt(map, [ col - 1, row ]).name === "wall"
-				&& row - 1 >= 0 && Map.tileAt(map, [ col - 1, row - 1 ]).name !== "wall"
-				) {
-					sprite = sprites["floor-base-corner"]
-				} else if (col - 1 >= 0 && Map.tileAt(map, [ col - 1, row ]).name === "wall") {
-					sprite = sprites["floor-base"]
-				} else {
-					sprite = sprites.floor
-				}
-				floors.drawImage(sprite, x, y)
 			} else {
+				let shadow = null
+				if (col - 1 >= 0 && Map.tileAt(map, [ col - 1, row ]).name === "wall"
+				&& row - 1 >= 0 && Map.tileAt(map, [ col - 1, row - 1 ]).name !== "wall"
+				) {
+					shadow = sprites["shadow-corner"]
+				} else if (col - 1 >= 0 && Map.tileAt(map, [ col - 1, row ]).name === "wall") {
+					shadow = sprites["shadow-edge"]
+				}
 				sprite = sprites[tile.name]
 				floors.drawImage(sprite, x, y)
+				if (shadow) {
+					floors.drawImage(shadow, x, y)
+				}
 			}
 		}
 	}
