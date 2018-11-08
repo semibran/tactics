@@ -30,19 +30,7 @@ export function update(cursor, keys, game, view) {
 		}
 	}
 
-	if (!held.mod) {
-		if ((held.left && !prev.left || held.left > delay && !(held.left % interval)) && !held.right) {
-			move(cursor, "left", map)
-		} else if ((held.right && !prev.right || held.right > delay && !(held.right % interval)) && !held.left) {
-			move(cursor, "right", map)
-		}
-
-		if ((held.up && !prev.up || held.up > delay && !(held.up % interval)) && !held.down) {
-			move(cursor, "up", map)
-		} else if ((held.down && !prev.down || held.down > delay && !(held.down % interval)) && !held.up) {
-			move(cursor, "down", map)
-		}
-	} else if (cursor.selection && phase.pending.includes(cursor.selection.unit)) {
+	if (held.mod && cursor.selection && phase.pending.includes(cursor.selection.unit)) {
 		let unit = cursor.selection.unit
 		let index = map.units.indexOf(unit)
 		let range = view.cache.ranges[index]
@@ -84,6 +72,18 @@ export function update(cursor, keys, game, view) {
 				}
 			}
 			cursor.cell[1] = y
+		}
+	} else {
+		if ((held.left && !prev.left || held.left > delay && !(held.left % interval)) && !held.right) {
+			move(cursor, "left", map)
+		} else if ((held.right && !prev.right || held.right > delay && !(held.right % interval)) && !held.left) {
+			move(cursor, "right", map)
+		}
+
+		if ((held.up && !prev.up || held.up > delay && !(held.up % interval)) && !held.down) {
+			move(cursor, "up", map)
+		} else if ((held.down && !prev.down || held.down > delay && !(held.down % interval)) && !held.up) {
+			move(cursor, "down", map)
 		}
 	}
 
