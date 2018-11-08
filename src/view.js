@@ -534,6 +534,17 @@ function drawMap(map, sprites) {
 					sprite = sprites.grass
 				}
 				floors.drawImage(sprite, x, y)
+			} else if (tile.name === "floor") {
+				if (col - 1 >= 0 && Map.tileAt(map, [ col - 1, row ]).name === "wall"
+				&& row - 1 >= 0 && Map.tileAt(map, [ col - 1, row - 1 ]).name !== "wall"
+				) {
+					sprite = sprites["floor-base-corner"]
+				} else if (col - 1 >= 0 && Map.tileAt(map, [ col - 1, row ]).name === "wall") {
+					sprite = sprites["floor-base"]
+				} else {
+					sprite = sprites.floor
+				}
+				floors.drawImage(sprite, x, y)
 			} else {
 				sprite = sprites[tile.name]
 				floors.drawImage(sprite, x, y)
