@@ -34,7 +34,9 @@ export function create(width, height, sprites) {
 			viewport: {
 				size: [ width, height ],
 				position: null,
-				target: null
+				offset: [ 0, 0 ],
+				target: null,
+				shake: 0
 			},
 			dialogs: []
 		},
@@ -43,7 +45,8 @@ export function create(width, height, sprites) {
 			selection: null,
 			selected: null,
 			target: null,
-			moved: null,
+			moved: false,
+			attack: null,
 			units: null,
 			ranges: [],
 			squares: [],
@@ -186,12 +189,21 @@ export function render(view, game) {
 		viewport.position[1] += (viewport.target[1] - viewport.position[1]) / 16
 	}
 
-	if (true) {
-		let position = cursor.cell.map(free)
-		let relative = [
-			position[0] - viewport.position[0],
-			position[1] - viewport.position[1]
-		]
+	if (anim && anim.type === "attack") {
+		if (anim.data.time === 7) {
+			viewport.shake = 30
+		}
+	}
+
+	if (viewport.shake) {
+		viewport.shake--
+		let period = 5
+		let amplitude = 3
+		let duration = 30
+		let progress = 1 - (viewport.shake % period) / period
+		viewport.offset[1] = Math.sin(progress * 2 * Math.PI) * amplitude * viewport.shake / duration
+	} else {
+		viewport.offset[1] = 0
 	}
 
 	let selection = cursor.selection || cache.selection
@@ -253,6 +265,7 @@ export function render(view, game) {
 		}
 
 		let moving = anim && anim.type === "move" && anim.target === cached
+		let attacking = anim && anim.type === "attack" && anim.target === cached
 		if (!cache.moved && moving) {
 			cache.moved = true
 		}
@@ -292,6 +305,11 @@ export function render(view, game) {
 				cells.push(ally.cell)
 			}
 
+			let dest = unit.cell
+			if (path && path.length) {
+				dest = path[path.length - 1]
+			}
+
 			if (range.move.find(cell => Cell.equals(cursor.cell, cell))) {
 				if (!path) {
 					path = cache.path = pathfind(cells, unit.cell, cursor.cell)
@@ -318,7 +336,7 @@ export function render(view, game) {
 					}
 				}
 			} else if (target && !Unit.allied(unit, target)
-			&& Cell.manhattan(path[path.length - 1], target.cell) > unit.equipment.weapon.rng
+			&& Cell.manhattan(dest, target.cell) > unit.equipment.weapon.rng
 			) {
 				let neighbors = Cell.neighborhood(target.cell, unit.equipment.weapon.rng)
 				for (var i = path.length; i--;) {
@@ -352,7 +370,7 @@ export function render(view, game) {
 			})))
 		}
 
-		if (cache.moved && !moving && !dialogs.length) {
+		if (cache.moved && !moving && !attacking && !dialogs.length) {
 			let options = null
 			let neighbors = Cell.neighborhood(cached.cell, cached.equipment.weapon.rng)
 			let enemies = []
@@ -388,7 +406,7 @@ export function render(view, game) {
 		}
 	}
 
-	let selected = cursor.selection || cursor.under
+	let selected = cursor.selection || (cache.attack && cache.attack.attacker) || cursor.under
 	if (selected && !(cache.selected && selected !== cache.selected)
 	&& !(dialog && dialog.type === "forecast" && cache.dialogs.selection && cache.dialogs.selection.name.position[1] === 8)
 	) {
@@ -453,6 +471,8 @@ export function render(view, game) {
 			target = cache.target
 		}
 		cursor.cell = target.unit.cell.slice()
+	} else if (cache.attack) {
+		target = cache.target
 	} else if (cursor.selection && cursor.under && cursor.selection !== cursor.under && !Unit.allied(cursor.selection.unit, cursor.under.unit)) {
 		target = cursor.under
 	}
@@ -510,6 +530,28 @@ export function render(view, game) {
 			cache.target = null
 		}
 		layers.dialogs.push(details.name, details.hp)
+	}
+
+	if (cache.attack) {
+		if (!viewport.shake && !(anim && anim.type === "attack")) {
+			cache.attack = null
+		} else if (viewport.shake) {
+			let attacker = cache.attack.attacker.unit
+			let target = cache.attack.target.unit
+			let canvas = cache.dialogs.target.hp.image
+			let context = canvas.getContext("2d")
+			let damage = Unit.dmg(attacker, target)
+			let progress = 1 - Math.max(0, viewport.shake - 10) / 20
+			let width = 0
+			if (progress < 0.5) {
+				width = damage * 14 * progress * 2
+				context.fillStyle = "white"
+			} else {
+				width = damage * 14 * (progress * 2 - 1)
+				context.fillStyle = "black"
+			}
+			context.fillRect(31 + (target.hp + damage) * 14 - width, 11, width, 2)
+		}
 	}
 
 	if (dialog && dialog.type === "actions") {
@@ -627,31 +669,16 @@ export function render(view, game) {
 		let a = Math.sin(dialog.time % 60 / 60 * Math.PI) * 255
 		let steps = Cell.manhattan(cached.cell, target.cell)
 
-		let unitDialog = cache.dialogs.selection
-		if (unitDialog) {
-			let damage = steps <= target.equipment.weapon.rng
-				? Unit.dmg(target, unit)
-				: 0
-			if (damage) {
-				let context = Canvas(damage * n, 2)
-				context.fillStyle = `rgb(${a}, ${a}, ${a})`
-				context.fillRect(0, 0, context.canvas.width, context.canvas.height)
-				layers.dialogs.push({
-					image: context.canvas,
-					position: [
-						unitDialog.hp.position[0] + x + (target.hp - damage) * n,
-						unitDialog.hp.position[1] + y
-					]
-				})
-			}
-		}
-
+		let finisher = false
 		let targetDialog = cache.dialogs.target
 		if (targetDialog) {
 			let damage = steps <= unit.equipment.weapon.rng
 				? Unit.dmg(unit, target)
 				: 0
 			if (damage) {
+				if (target.hp - damage <= 0) {
+					finisher = true
+				}
 				let context = Canvas(damage * n, 2)
 				context.fillStyle = `rgb(${a}, ${a}, ${a})`
 				context.fillRect(0, 0, context.canvas.width, context.canvas.height)
@@ -663,6 +690,41 @@ export function render(view, game) {
 					]
 				})
 			}
+		}
+
+		if (!finisher) {
+			let unitDialog = cache.dialogs.selection
+			if (unitDialog) {
+				let damage = steps <= target.equipment.weapon.rng
+					? Unit.dmg(target, unit)
+					: 0
+				if (damage) {
+					let context = Canvas(damage * n, 2)
+					context.fillStyle = `rgb(${a}, ${a}, ${a})`
+					context.fillRect(0, 0, context.canvas.width, context.canvas.height)
+					layers.dialogs.push({
+						image: context.canvas,
+						position: [
+							unitDialog.hp.position[0] + x + (unit.hp - damage) * n,
+							unitDialog.hp.position[1] + y
+						]
+					})
+				}
+			}
+		}
+
+		if (dialog.done) {
+			unit.cell = cached.cell
+			Unit.attack(unit, target)
+			cache.squares.length = 0
+			cache.ranges.length = 0
+			cache.moved = false
+			cache.attack = { attacker: cache.selected, target: cache.target }
+			cursor.selection = null
+			cache.selection = null
+			dialogs.length = 0
+			anim.done = true
+			anims.push(Anim("attack", cached, Anims.attack(unit.cell, target.cell)))
 		}
 	} else {
 		cache.dialogs.forecast = null
@@ -713,8 +775,9 @@ export function render(view, game) {
 
 	// layers.dialogs.push(title, body)
 
-	if (!(dialog && dialog.type === "actions") && !cache.moved
-	|| (dialog && dialog.type === "forecast")
+	if (!cache.attack
+	&& (!(dialog && dialog.type === "actions") && !cache.moved
+	|| (dialog && dialog.type === "forecast"))
 ) {
 		renderCursor(layers, sprites.ui.cursor, cursor, view)
 	}
@@ -810,9 +873,9 @@ function renderUnits(layers, sprites, game, view) {
 			anim = anims[0] = Anim("move", unit, Anims.move(cache.path))
 		}
 		if (anim && anim.target === unit) {
-			if ([ "lift", "drop" ].includes(anim.type)) {
+			if (anim.type === "lift" || anim.type === "drop") {
 				z = anim.data.height
-			} else if (anim.type === "move") {
+			} else if (anim.type === "move" || anim.type === "attack") {
 				x = anim.data.cell[0] * 16
 				y = anim.data.cell[1] * 16
 			}
@@ -867,8 +930,8 @@ function renderLayers(layers, order, viewport, context) {
 			let x = Math.round(element.position[0])
 			let y = Math.round(element.position[1] - (element.position[2] || 0))
 			if (name !== "dialogs") {
-				x -= viewport.position[0]
-				y -= viewport.position[1]
+				x -= (viewport.position[0] + viewport.offset[0])
+				y -= (viewport.position[1] + viewport.offset[1])
 			}
 			context.drawImage(element.image, x, y)
 		}

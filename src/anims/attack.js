@@ -13,14 +13,14 @@ function attack(src, dest) {
 function update(anim) {
 	if (anim.done) return
 	let data = anim.data
-	let steps = data.time <= 4
+	let steps = data.time <= 7
 		? data.time
-		: 4 - (data.time - 4)
+		: 7 - (data.time - 7)
 
 	data.cell[0] = data.src[0] + data.norm[0] / 8 * steps
 	data.cell[1] = data.src[1] + data.norm[1] / 8 * steps
 
-	if (++data.time === 9) {
+	if (++data.time === 15) {
 		anim.done = true
 	}
 }
