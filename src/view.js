@@ -48,6 +48,7 @@ export function create(width, height, sprites) {
 			target: null,
 			moved: false,
 			attack: null,
+			phase: { pending: [], faction: "player" },
 			units: null,
 			ranges: [],
 			squares: [],
@@ -547,14 +548,14 @@ export function render(view, game) {
 		let power = cache.attack.power
 		let time = cache.attack.time
 		if (time >= cache.attack.duration) {
-			Game.endTurn(game, attacker)
-			cursor.cell = attacker.cell.slice()
-			cursor.prev = cursor.cell.slice()
 			cache.attack = null
 			if (!target.hp) {
 				let index = map.units.indexOf(target)
 				map.units.splice(index, 1)
 			}
+			Game.endTurn(game, attacker)
+			cursor.cell = attacker.cell.slice()
+			cursor.prev = cursor.cell.slice()
 		} else if (time >= 7) {
 			let canvas = cache.dialogs.target.hp.image
 			let context = canvas.getContext("2d")
@@ -570,26 +571,30 @@ export function render(view, game) {
 			}
 			width = Math.ceil(damage * 14 * progress)
 			context.fillRect(31 + (target.hp + damage) * 14 - width, 11, width, 2)
-			let number = cache.attack.number
-			if (!number) {
-				number = cache.attack.number = {
+			let value = cache.attack.value
+			if (!value) {
+				let text = power.toString()
+				if (power === 0) {
+					text = "Miss!"
+				}
+				value = cache.attack.value = {
 					offset: 0,
 					velocity: -2,
-					image: sprites.ui.Text(power.toString())
+					image: sprites.ui.Text(text)
 				}
 			} else {
-				number.offset += number.velocity
-				number.velocity += 0.25
-				if (number.offset > 0) {
-					number.offset = 0
-					number.velocity *= -1 / 3
+				value.offset += value.velocity
+				value.velocity += 0.25
+				if (value.offset > 0) {
+					value.offset = 0
+					value.velocity *= -1 / 3
 				}
 			}
 			layers.damage.push({
-				image: number.image,
+				image: value.image,
 				position: [
-					target.cell[0] * 16 + 4,
-					target.cell[1] * 16 - 12 + number.offset
+					target.cell[0] * 16 + 8 - value.image.width / 2,
+					target.cell[1] * 16 - 12 + value.offset
 				]
 			})
 		}
@@ -765,7 +770,7 @@ export function render(view, game) {
 				target: cache.target,
 				power: power,
 				damage: damage,
-				number: null,
+				value: null,
 				time: 0,
 				duration: 60
 			}
@@ -840,6 +845,16 @@ export function render(view, game) {
 
 	renderUnits(layers, sprites.pieces, game, view)
 	renderLayers(layers, order, viewport, context)
+
+	if (!anims.length) {
+		if (cache.phase.faction !== game.phase.faction) {
+			cursor.cell = game.phase.pending[0].cell.slice()
+		}
+		cache.phase = {
+			pending: game.phase.pending.slice(),
+			faction: game.phase.faction
+		}
+	}
 }
 
 function free(col) {
@@ -917,8 +932,8 @@ function renderUnits(layers, sprites, game, view) {
 		let y = cell[1] * 16
 		let z = 0
 		let sprite = sprites[unit.faction][symbols[unit.type]]
-		if (!game.phase.pending.includes(real)
-		&& game.phase.faction === unit.faction
+		if (!cache.phase.pending.includes(real)
+		&& cache.phase.faction === unit.faction
 		&& !(anim && anim.target === unit && (anim.type === "move" || anim.type === "attack"))
 		) {
 			sprite = sprites.done[unit.faction][symbols[unit.type]]
@@ -956,6 +971,7 @@ function renderUnits(layers, sprites, game, view) {
 			if (view.cache.attack) {
 				let attack = view.cache.attack
 				if (attack.target.unit === real
+				&& attack.damage
 				&& attack.time >= 7/* && attack.time < 7 + 45*/ && attack.time % 2
 				) {
 					sprite = sprites.flashing
