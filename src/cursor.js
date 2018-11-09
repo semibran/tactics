@@ -163,16 +163,16 @@ export function cycle(cursor, game, reverse) {
 	let { map, phase } = game
 	let unit = Map.unitAt(map, cursor.cell)
 	if (!unit) {
-		unit = phase.pending.find(unit => unit.faction === "player")
+		unit = phase.pending.find(unit => unit.faction === phase.faction)
 		if (unit) {
 			cursor.cell = unit.cell.slice()
 		}
 		return
 	}
 
-	let units = unit.faction === "player"
+	let units = unit.faction === phase.faction
 		? phase.pending
-		: map.units.filter(unit => unit.faction === "enemy")
+		: map.units.filter(other => other.faction === unit.faction)
 	let index = units.indexOf(unit)
 	let other = null
 	if (!reverse) {

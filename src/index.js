@@ -35,7 +35,7 @@ function main(spritesheet) {
 			} else if (dialog.type === "forecast") {
 				Forecast.update(dialog, keys)
 			}
-		} else if (!view.cache.attack) {
+		} else if (!view.cache.attack && !view.cache.moved) {
 			Cursor.update(cursor, keys, game, view)
 		}
 

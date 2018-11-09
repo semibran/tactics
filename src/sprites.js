@@ -138,8 +138,7 @@ function pieces(sprites) {
 		.getContext("2d")
 		.getImageData(0, 0, 16, 16)
 
-	pixels.replace(base, colors.blue, colors.white)
-	pixels.replace(base, colors.navy, colors.white)
+	pixels.replace(base, colors.black, colors.white)
 
 	let piece = Canvas(base.width, base.height)
 	piece.putImageData(base, 0, 0)
