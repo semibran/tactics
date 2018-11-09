@@ -12,10 +12,10 @@ export function update(keys) {
 }
 
 export const controls = {
-	left:    [ "KeyA" ],
-	up:      [ "KeyW" ],
-	right:   [ "KeyD" ],
-	down:    [ "KeyS" ],
+	left:    [ "KeyA", "ArrowLeft"  ],
+	up:      [ "KeyW", "ArrowUp"    ],
+	right:   [ "KeyD", "ArrowRight" ],
+	down:    [ "KeyS", "ArrowDown"  ],
 	confirm: [ "Space" ],
 	cancel:  [ "Escape" ],
 	select:  [ "Tab" ],

@@ -21,8 +21,23 @@ export function update(cursor, keys, game, view) {
 				let index = map.units.indexOf(unit)
 				let cached = view.cache.units[index]
 				let range = view.cache.ranges[index]
-				if (range && range.move.find(cell => Cell.equals(cell, cursor.cell))) {
-					Unit.move(cached, cursor.cell.slice(), map)
+				if (range) {
+					let path = view.cache.path
+					if (path && path.length) {
+						let dest = path[path.length - 1].slice()
+						if (range.move.find(cell => Cell.equals(cell, cursor.cell))) {
+							Unit.move(cached, dest, map)
+						} else if(range.attack.find(cell => Cell.equals(cell, cursor.cell))) {
+							Unit.move(cached, dest, map)
+							let target = Map.unitAt(map, cursor.cell)
+							view.cache.target = {
+								unit: target,
+								time: 0
+							}
+						}
+					} else {
+						view.cache.moved = true
+					}
 				}
 			} else {
 				deselect(cursor)

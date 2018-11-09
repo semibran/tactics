@@ -3,6 +3,13 @@ import extract from "../lib/img-extract"
 import pixels from "../lib/pixels"
 import Canvas from "../lib/canvas"
 
+const symbols = {
+	warrior: "axe",
+	knight: "shield",
+	rogue: "dagger",
+	mage: "hat"
+}
+
 export default function normalize(spritesheet) {
 	let sprites = disassemble(spritesheet, sourcemap)
 	return {
@@ -143,6 +150,7 @@ function pieces(sprites) {
 
 function ui(sprites) {
 	let ui = {
+		symbols: sprites.symbols,
 		swords:  sprites.swords,
 		cursor:  cursor(sprites.cursor),
 		typeface: typeface(sprites.typeface),
@@ -184,20 +192,36 @@ function ui(sprites) {
 	ui.Box = Box
 	ui.TextBox = TextBox
 	ui.HealthBar = HealthBar
+	ui.UnitDetails = UnitDetails
 	ui.Arrow = Arrow
 
 	return ui
 
 	function Text(content) {
+		let width = 0
+		for (let i = 0; i < content.length; i++) {
+			let char = content[i]
+			if (char === " ") {
+				width += 4
+			} else {
+				width += 8
+			}
+		}
+
 		let canvas = document.createElement("canvas")
-		canvas.width = content.length * 8
+		canvas.width = width
 		canvas.height = 8
 
 		let context = canvas.getContext("2d")
-		for (let i = 0; i < content.length; i++) {
+		for (let i = 0, x = 0; i < content.length; i++) {
 			let char = content[i]
-			let sprite = ui.typeface[char]
-			context.drawImage(sprite, i * 8, 0)
+			if (char === " ") {
+				x += 4
+			} else {
+				let sprite = ui.typeface[char]
+				context.drawImage(sprite, x, 0)
+				x += 8
+			}
 		}
 
 		return canvas
@@ -234,24 +258,38 @@ function ui(sprites) {
 		return canvas
 	}
 
-	function TextBox(lines) {
-		const lengths = lines.map(line => line.length)
-		const longest = Math.max(...lengths)
-		const width   = longest * 8
-		const height  = lines.length * 8
+	function TextBox(content) {
+		let width = 0
+		let height = 0
+		let text = null
+		if (Array.isArray(content)) {
+			text = content.map(line => Text(line))
+			let lengths = content.map(line => line.width)
+			let longest = Math.max(...lengths)
+			width = longest
+			height = content.length * 8
+		} else {
+			text = Text(content)
+			width = content.length * 8
+			height = 8
+		}
 
 		let box = Box(width + 16, height + 16)
 		let context = Canvas(width, height)
 
-		for (let y = 0; y < lines.length; y++) {
-			let line = lines[y]
-			if (line.length) {
-				context.drawImage(Text(line), 0, y * 8)
+		if (Array.isArray(content)) {
+			for (let y = 0; y < text.length; y++) {
+				let line = text[y]
+				context.drawImage(line, 0, y * 8)
 			}
+		} else {
+			context.drawImage(text, 0, 0)
 		}
 
-		box.getContext("2d")
-			.drawImage(context.canvas, 8, 8)
+		if (context.canvas.width) {
+			box.getContext("2d")
+				.drawImage(context.canvas, 8, 8)
+		}
 
 		return box
 	}
@@ -268,6 +306,27 @@ function ui(sprites) {
 		// context.fillRect(2, 2, Math.floor(content * 44), 4)
 		context.fillRect(3, 3, Math.floor(content * 42), 2)
 		return context.canvas
+	}
+
+	function UnitDetails(unit) {
+		let symbol = ui.symbols[symbols[unit.type]]
+		let name = Text(unit.name)
+		let nameDialog = Box(name.width + symbol.width + 20, 24)
+		let context = nameDialog.getContext("2d")
+		context.drawImage(symbol, 8, 8)
+		context.drawImage(name, 20, 8)
+
+		let hpDialog = Box(84, 24)
+		let bar = HealthBar(unit.hp / 3, unit.faction)
+		let label = Text("HP")
+		context = hpDialog.getContext("2d")
+		context.drawImage(label, 8, 8)
+		context.drawImage(bar, 28, 8)
+
+		return  {
+			name: nameDialog,
+			hp: hpDialog
+		}
 	}
 
 	function Arrow(path) {

@@ -35,18 +35,23 @@ export function create(width, height, sprites) {
 				size: [ width, height ],
 				position: null,
 				target: null
-			}
+			},
+			dialogs: []
 		},
 		cache: {
 			map: null,
 			selection: null,
 			selected: null,
+			target: null,
 			moved: null,
 			units: null,
 			ranges: [],
 			squares: [],
-			dialogs: [],
-			dialog: null
+			dialogs: {
+				objective: null,
+				selection: null,
+				target: null
+			}
 		}
 	}
 }
@@ -62,6 +67,10 @@ export function update(view) {
 		cache.selection.time++
 	}
 
+	if (cache.target) {
+		cache.target.time++
+	}
+
 	let anims = view.state.anims
 	let anim = anims[0]
 	if (!anim) return
@@ -74,10 +83,11 @@ export function update(view) {
 
 export function render(view, game) {
 	let { context, sprites, cache } = view
-	let { time, cursor, viewport, anims } = view.state
+	let { time, cursor, viewport, anims, dialogs } = view.state
 	let { map } = game
 	let canvas = context.canvas
 	let anim = anims[0]
+	let dialog = dialogs[0]
 	let order = [
 		"floors",
 		"squares",
@@ -128,28 +138,44 @@ export function render(view, game) {
 	}
 
 	let focus = null
-	if (!cursor.selection || !game.phase.pending.includes(cursor.selection.unit) || cache.moved) {
+	if (dialog && dialog.type === "forecast" && !cache.moved) {
+		let target = dialog.targets[dialog.index]
+		focus = target.cell
+	} else if (!cursor.selection || !game.phase.pending.includes(cursor.selection.unit) || cache.moved) {
 		focus = cursor.cell
 	} else if (cursor.selection && game.phase.pending.includes(cursor.selection.unit)) {
 		focus = cursor.selection.unit.cell
 	}
 
 	if (focus) {
-		viewport.target[0] = focus[0] * 16 + 8 - viewport.size[0] / 2
-		viewport.target[1] = focus[1] * 16 + 8 - viewport.size[1] / 2
-
-		let max = Map.width(map) * 16 - viewport.size[0]
-		if (viewport.target[0] < 0) {
-			viewport.target[0] = 0
-		} else if (viewport.target[0] > max) {
-			viewport.target[0] = max
+		let width = Map.width(map) * 16
+		if (width > viewport.size[0] || dialog && dialog.type === "forecast") {
+			viewport.target[0] = focus[0] * 16 + 8 - viewport.size[0] / 2
+			let max = width - viewport.size[0]
+			if (width > viewport.size[0]) {
+				if (viewport.target[0] < 0) {
+					viewport.target[0] = 0
+				} else if (viewport.target[0] > max) {
+					viewport.target[0] = max
+				}
+			}
+		} else {
+			viewport.target[0] = width / 2 - viewport.size[0] / 2
 		}
 
-		let may = Map.height(map) * 16 - viewport.size[1]
-		if (viewport.target[1] < 0) {
-			viewport.target[1] = 0
-		} else if (viewport.target[1] > may) {
-			viewport.target[1] = may
+		let height = Map.height(map) * 16
+		if (height > viewport.size[1] || dialog && dialog.type === "forecast") {
+			viewport.target[1] = focus[1] * 16 + 8 - viewport.size[1] / 2
+			let may = height - viewport.size[1]
+			if (height > viewport.size[1]) {
+				if (viewport.target[1] < 0) {
+					viewport.target[1] = 0
+				} else if (viewport.target[1] > may) {
+					viewport.target[1] = may
+				}
+			}
+		} else {
+			viewport.target[1] = height / 2 - viewport.size[1] / 2
 		}
 	}
 
@@ -166,8 +192,6 @@ export function render(view, game) {
 			position[0] - viewport.position[0],
 			position[1] - viewport.position[1]
 		]
-
-		// console.log(relative.map(snap))
 	}
 
 	let selection = cursor.selection || cache.selection
@@ -254,14 +278,13 @@ export function render(view, game) {
 		}
 
 		let path = cache.path
+		let target = Map.unitAt(map, cursor.cell)
 		if (Cell.equals(cursor.cell, unit.cell)) {
 			if (path) {
 				path.length = 1
 			}
 		} else if (game.phase.pending.includes(unit)
 		&& cursor.selection
-		&& range.move.find(cell => Cell.equals(cursor.cell, cell))
-		&& !Map.unitAt(map, cursor.cell)
 		) {
 			let cells = range.move.slice()
 			let allies = map.units.filter(other => Unit.allied(unit, other))
@@ -269,28 +292,54 @@ export function render(view, game) {
 				cells.push(ally.cell)
 			}
 
-			if (!path) {
-				path = cache.path = pathfind(cells, unit.cell, cursor.cell)
-			} else {
-				for (var i = 0; i < path.length; i++) {
-					let cell = path[i]
-					if (Cell.equals(cursor.cell, cell)) {
-						break
+			if (range.move.find(cell => Cell.equals(cursor.cell, cell))) {
+				if (!path) {
+					path = cache.path = pathfind(cells, unit.cell, cursor.cell)
+				} else {
+					for (var i = 0; i < path.length; i++) {
+						let cell = path[i]
+						if (Cell.equals(cursor.cell, cell)) {
+							break
+						}
+					}
+					if (i < path.length - 1) {
+						// truncate the path up to the current cell
+						path.splice(i + 1, path.length - i - 1)
+					} else {
+						let pathless = cells.filter(cell => !path.find(other => Cell.equals(cell, other)))
+						let prev = path[path.length - 1]
+						let ext = pathfind(pathless, prev, cursor.cell)
+						if (ext && path.length + ext.length - 2 <= Unit.mov(unit)) {
+							ext.shift() // exclude duplicate start cell
+							path.push(...ext)
+						} else {
+							path = cache.path = pathfind(cells, unit.cell, cursor.cell)
+						}
 					}
 				}
-				if (i < path.length - 1) {
-					// truncate the path up to the current cell
-					path.splice(i + 1, path.length - i - 1)
-				} else {
-					let pathless = cells.filter(cell => !path.find(other => Cell.equals(cell, other)))
-					let prev = path[path.length - 1]
-					let ext = pathfind(pathless, prev, cursor.cell)
-					if (ext && path.length + ext.length - 2 <= Unit.mov(unit)) {
-						ext.shift() // exclude duplicate start cell
-						path.push(...ext)
-					} else {
-						path = cache.path = pathfind(cells, unit.cell, cursor.cell)
+			} else if (target && !Unit.allied(unit, target)
+			&& Cell.manhattan(path[path.length - 1], target.cell) > unit.equipment.weapon.rng
+			) {
+				let neighbors = Cell.neighborhood(target.cell, unit.equipment.weapon.rng)
+				for (var i = path.length; i--;) {
+					let cell = path[i]
+					if (target) {
+						if (neighbors.find(neighbor => Cell.equals(cell, neighbor))) {
+							path.splice(i + 1, path.length - i - 1)
+							break
+						}
 					}
+				}
+				if (i === -1) {
+					let dest = null
+					for (let i = 0; i < range.move.length; i++) {
+						let cell = range.move[i]
+						if (neighbors.find(neighbor => Cell.equals(cell, neighbor))) {
+							dest = cell
+							break
+						}
+					}
+					path = cache.path = pathfind(cells, unit.cell, dest)
 				}
 			}
 		}
@@ -303,137 +352,195 @@ export function render(view, game) {
 			})))
 		}
 
-		if (cache.moved && !moving && !cache.menu) {
+		if (cache.moved && !moving && !dialogs.length) {
 			let options = null
 			let neighbors = Cell.neighborhood(cached.cell, cached.equipment.weapon.rng)
-			let enemy = null
+			let enemies = []
 			for (let neighbor of neighbors) {
 				let other = Map.unitAt(map, neighbor)
 				if (other && !Unit.allied(unit, other)) {
-					enemy = other
-					break
+					enemies.push(other)
 				}
 			}
-			if (enemy) {
+			if (enemies.length) {
 				options = [ "attack", "wait" ]
 			} else {
 				options = [ "wait" ]
 			}
-			cache.menu = {
+			dialogs.push({
+				type: "actions",
 				data: Menu.create(options),
+				enemies: enemies,
 				box: null,
 				size: [ 16, 16 ],
 				targetSize: null
+			})
+			if (cache.target) {
+				let target = cache.target.unit
+				dialogs.unshift({
+					type: "forecast",
+					index: enemies.indexOf(target),
+					targets: enemies
+				})
+				cursor.cell = target.cell.slice()
+				cursor.prev = target.cell.slice()
 			}
 		}
 	}
 
 	let selected = cursor.selection || cursor.under
-	if (selected && !(cache.selected && selected !== cache.selected)) {
+	if (selected && !(cache.selected && selected !== cache.selected)
+	&& !(dialog && dialog.type === "forecast" && cache.dialogs.selection && cache.dialogs.selection.name.position[1] === 8)
+	) {
 		if (!cache.selected) {
 			cache.selected = selected
 		}
 		let unit = selected.unit
-		let index = map.units.indexOf(unit)
-		if (!cache.dialogs[index]) {
-			let nameDialog = sprites.ui.Box((unit.name.length + 1) * 8 + 20, 24)
-			let name = sprites.ui.Text(unit.name)
-			let symbol = sprites.pieces.symbols[symbols[unit.type]]
-			let context = nameDialog.getContext("2d")
-			context.drawImage(symbol, 8, 8)
-			context.drawImage(name, 20, 8)
-
-			let hpDialog = sprites.ui.Box(84, 24)
-			let bar = sprites.ui.HealthBar(unit.hp / 3, unit.faction)
-			let label = sprites.ui.Text("HP")
-			// let value = sprites.ui.Text(`${unit.hp}/3`)
-			context = hpDialog.getContext("2d")
-			context.drawImage(label, 8, 8)
-			context.drawImage(bar, 28, 8)
-			// context.drawImage(value, 80, 8)
-
+		let below = unit.cell[1] * 16 + 8 - viewport.position[1] >= viewport.size[1] / 2
+		if (!cache.dialogs.selection) {
 			let y = viewport.size[1] - 68
-			if (unit.cell[1] > Map.height(map) - viewport.size[1] / 32) {
+			if (below && !(dialog && dialog.type === "forecast")) {
 				y = 0
 			}
 
-			cache.dialogs[index] = {
+			let details = sprites.ui.UnitDetails(unit)
+			cache.dialogs.selection = {
 				name: {
-					canvas: nameDialog,
-					x: -nameDialog.width,
-					y: y + 8
+					image: details.name,
+					position: [ -details.name.width, y + 8 ]
 				},
 				hp: {
-					canvas: hpDialog,
-					x: -hpDialog.width,
-					y: y + 36
+					image: details.hp,
+					position: [ -details.hp.width, y + 36 ]
 				}
 			}
 		}
 
-		let dialogs = cache.dialogs[index]
+		let details = cache.dialogs.selection
 		if (selected) {
 			if (selected.time >= 12) {
-				dialogs.name.x += (8 - dialogs.name.x) / 8
+				details.name.position[0] += (8 - details.name.position[0]) / 8
 			}
 			if (selected.time >= 16) {
-				dialogs.hp.x += (8 - dialogs.hp.x) / 8
+				details.hp.position[0] += (8 - details.hp.position[0]) / 8
 			}
 		}
-
-		layers.dialogs.push({
-			image: dialogs.name.canvas,
-			position: [ dialogs.name.x, dialogs.name.y ]
-		})
-
-		layers.dialogs.push({
-			image: dialogs.hp.canvas,
-			position: [ dialogs.hp.x, dialogs.hp.y ]
-		})
+		layers.dialogs.push(details.name, details.hp)
 	} else if (cache.selected) {
 		let unit = cache.selected.unit
-		let index = map.units.indexOf(unit)
-		let dialogs = cache.dialogs[index]
-		// move dialogs out of view
-		if (dialogs.name.x > -dialogs.name.canvas.width
-		|| dialogs.hp.x > -dialogs.hp.canvas.width
+		let details = cache.dialogs.selection
+		// move details out of view
+		if (details.name.position[0] > -details.name.image.width
+		|| details.hp.position[0] > -details.hp.image.width
 		) {
-			dialogs.name.x -= 16
-			dialogs.hp.x -= 16
+			details.name.position[0] -= 16
+			details.hp.position[0] -= 16
 		} else {
+			cache.dialogs.selection = null
 			cache.selected = null
 		}
-
-		layers.dialogs.push({
-			image: dialogs.name.canvas,
-			position: [ dialogs.name.x, dialogs.name.y ]
-		})
-
-		layers.dialogs.push({
-			image: dialogs.hp.canvas,
-			position: [ dialogs.hp.x, dialogs.hp.y ]
-		})
+		layers.dialogs.push(details.name, details.hp)
 	}
 
-	let menu = cache.menu
-	if (menu) {
-		if (menu.data.selection) {
-			let unit = cursor.selection.unit
-			let index = map.units.indexOf(unit)
-			let cached = cache.units[index]
-			unit.cell = cached.cell
-			cursor.selection = null
-			cache.selection = null
-			cache.squares.length = 0
-			cache.ranges.length = 0
-			cache.menu = null
-			cache.moved = false
-			anim.done = true
-			anims.push(
-				Anim("drop", anim.target, Anims.drop(anim.data.height))
-			)
-			let jndex = game.phase.pending.indexOf(unit)
-			game.phase.pending.splice(jndex, 1)
+	let target = null
+	if (dialog && dialog.type === "forecast") {
+		target = dialog.targets[dialog.index]
+		if (!cache.target) {
+			target = cache.target = { unit: target, time: 0 }
+		} else if (cache.target.unit !== target) {
+			target = { unit: target, time: 0 }
+		} else {
+			target = cache.target
+		}
+		cursor.cell = target.unit.cell.slice()
+	} else if (cursor.selection && cursor.under && cursor.selection !== cursor.under && !Unit.allied(cursor.selection.unit, cursor.under.unit)) {
+		target = cursor.under
+	}
+
+	if (target && !(cache.target && target !== cache.target)
+	&& !(dialog && dialog.type === "actions")
+	&& !(dialog && dialog.type === "forecast" && cache.dialogs.target && cache.dialogs.target.name.position[1] === 8)
+	) {
+		if (!cache.target) {
+			cache.target = target
+		}
+		let unit = target.unit
+		let below = unit.cell[1] * 16 + 8 - viewport.position[1] >= viewport.size[1] / 2
+		if (!cache.dialogs.target) {
+			let y = viewport.size[1] - 68
+			if (below && !(dialog && dialog.type === "forecast")) {
+				y = 0
+			}
+
+			let details = sprites.ui.UnitDetails(unit)
+			cache.dialogs.target = {
+				name: {
+					image: details.name,
+					position: [ viewport.size[0], y + 8 ]
+				},
+				hp: {
+					image: details.hp,
+					position: [ viewport.size[0], y + 36 ]
+				}
+			}
+		}
+		let details = cache.dialogs.target
+		if (target) {
+			if (target.time >= 12) {
+				let box = details.name
+				box.position[0] += (viewport.size[0] - box.image.width - 8 - box.position[0]) / 8
+			}
+			if (target.time >= 16) {
+				let box = details.hp
+				box.position[0] += (viewport.size[0] - box.image.width - 8 - box.position[0]) / 8
+			}
+		}
+		layers.dialogs.push(details.name, details.hp)
+	} else if (cache.target) {
+		let unit = cache.target.unit
+		let details = cache.dialogs.target
+		// move details out of view
+		if (details.name.position[0] < viewport.size[0]
+		|| details.hp.position[0] < viewport.size[0]
+		) {
+			details.name.position[0] += 16
+			details.hp.position[0] += 16
+		} else {
+			cache.dialogs.target = null
+			cache.target = null
+		}
+		layers.dialogs.push(details.name, details.hp)
+	}
+
+	if (dialog && dialog.type === "actions") {
+		let menu = dialog
+		let selection = menu.data.selection
+		if (selection) {
+			if (selection === "wait") {
+				let unit = cursor.selection.unit
+				let index = map.units.indexOf(unit)
+				let cached = cache.units[index]
+				unit.cell = cached.cell
+				cursor.selection = null
+				cache.selection = null
+				cache.squares.length = 0
+				cache.ranges.length = 0
+				cache.menu = null
+				cache.moved = false
+				anim.done = true
+				anims.push(
+					Anim("drop", anim.target, Anims.drop(anim.data.height))
+				)
+				let jndex = game.phase.pending.indexOf(unit)
+				game.phase.pending.splice(jndex, 1)
+				dialogs.shift()
+			} else if (selection === "attack") {
+				dialogs.unshift({
+					type: "forecast",
+					index: 0,
+					targets: menu.enemies
+				})
+			}
 		} else {
 			if (!menu.targetSize) {
 				let longest = ""
@@ -461,9 +568,9 @@ export function render(view, game) {
 				let symbol = null
 				let option = menu.data.options[menu.data.index]
 				if (option === "attack") {
-					symbol = sprites.pieces.symbols.sword
+					symbol = sprites.ui.symbols.sword
 				} else if (option === "wait") {
-					symbol = sprites.pieces.symbols.clock
+					symbol = sprites.ui.symbols.clock
 				}
 
 				let frame = (time % 180) / 180
@@ -477,7 +584,138 @@ export function render(view, game) {
 		}
 	}
 
-	if (!menu && !cache.moved) {
+	if (dialog && dialog.type === "forecast") {
+		let target = dialog.targets[dialog.index]
+		if (!cache.dialogs.forecast) {
+			let text = sprites.ui.Text("COMBAT FORECAST")
+			let box = sprites.ui.Box(text.width + 28, 24)
+			let context = box.getContext("2d")
+			let symbol = sprites.ui.symbols.sword
+			context.drawImage(symbol, 8, 8)
+			context.drawImage(text, 20, 8)
+			cache.dialogs.forecast = {
+				title: {
+					image: box,
+					position: [ -box.width, 8 ]
+				}
+			}
+		}
+		let title = cache.dialogs.forecast.title
+		title.position[0] += (8 - title.position[0]) / 8
+		layers.dialogs.push(title)
+
+		let unit = cursor.selection.unit
+		let index = map.units.indexOf(unit)
+		let cached = view.cache.units[index]
+		let neighbors = Cell.neighborhood(cached.cell, unit.equipment.weapon.rng)
+		for (let neighbor of neighbors) {
+			layers.squares.push({
+				image: sprites.ui.squares.attack,
+				position: [ neighbor[0] * 16, neighbor[1] * 16 ]
+			})
+		}
+
+		if (dialog.time === undefined) {
+			dialog.time = 0
+		} else {
+			dialog.time++
+		}
+
+		let x = 31
+		let y = 11
+		let n = Math.floor(42 / 3)
+		let a = Math.sin(dialog.time % 60 / 60 * Math.PI) * 255
+		let steps = Cell.manhattan(cached.cell, target.cell)
+
+		let unitDialog = cache.dialogs.selection
+		if (unitDialog) {
+			let damage = steps <= target.equipment.weapon.rng
+				? Unit.dmg(target, unit)
+				: 0
+			if (damage) {
+				let context = Canvas(damage * n, 2)
+				context.fillStyle = `rgb(${a}, ${a}, ${a})`
+				context.fillRect(0, 0, context.canvas.width, context.canvas.height)
+				layers.dialogs.push({
+					image: context.canvas,
+					position: [
+						unitDialog.hp.position[0] + x + (target.hp - damage) * n,
+						unitDialog.hp.position[1] + y
+					]
+				})
+			}
+		}
+
+		let targetDialog = cache.dialogs.target
+		if (targetDialog) {
+			let damage = steps <= unit.equipment.weapon.rng
+				? Unit.dmg(unit, target)
+				: 0
+			if (damage) {
+				let context = Canvas(damage * n, 2)
+				context.fillStyle = `rgb(${a}, ${a}, ${a})`
+				context.fillRect(0, 0, context.canvas.width, context.canvas.height)
+				layers.dialogs.push({
+					image: context.canvas,
+					position: [
+						targetDialog.hp.position[0] + x + (target.hp - damage) * n,
+						targetDialog.hp.position[1] + y
+					]
+				})
+			}
+		}
+	} else {
+		cache.dialogs.forecast = null
+	}
+
+	let objective = cache.dialogs.objective
+	if (!objective) {
+		let title = sprites.ui.TextBox([ "OBJECTIVE" ])
+		let body = sprites.ui.TextBox([ "Rout the enemy" ])
+		objective = cache.dialogs.objective = {
+			flipped: false,
+			title: {
+				image: title,
+				position: [ viewport.size[0], viewport.size[1] - title.height - 36 ]
+			},
+			body: {
+				image: body,
+				position: [ viewport.size[0], viewport.size[1] - body.height - 8 ]
+			}
+		}
+	}
+
+	let { title, body } = objective
+	if (!cursor.selection) {
+		title.position[0] += ((viewport.size[0] - title.image.width - 8) - title.position[0]) / 8
+		body.position[0] += ((viewport.size[0] - body.image.width - 8) - body.position[0]) / 8
+	} else if (title.position[0] < viewport.size[0]
+	|| body.position[0] < viewport.size[0]
+	) {
+		title.position[0] += Math.min(16, viewport.size[0] - title.position[0])
+		body.position[0] += Math.min(16, viewport.size[0] - body.position[0])
+	}
+
+	/*let threshold = Map.height(map) - viewport.size[1] / 32
+	if (cursor.cell[1] > threshold) {
+		if (!objective.flipped && title.position[1] > viewport.size[1] / 2) {
+			title.position[0] += Math.min(16, viewport.size[0] - title.position[0])
+			body.position[0] += Math.min(16, viewport.size[0] - body.position[0])
+			if (title.position[0] >= viewport.size[0]) {
+				objective.flipped = true
+				title.position[1] = 8
+				body.position[1] = 36
+			}
+		}
+	} else {
+
+	}*/
+
+	// layers.dialogs.push(title, body)
+
+	if (!(dialog && dialog.type === "actions") && !cache.moved
+	|| (dialog && dialog.type === "forecast")
+) {
 		renderCursor(layers, sprites.ui.cursor, cursor, view)
 	}
 
@@ -605,7 +843,7 @@ function renderCursor(layers, sprites, cursor, view) {
 	cursor.prev[1] += dy / 4
 
 	let frame = 0
-	if (cursor.selection) {
+	if (cursor.selection && !view.state.dialogs.length) {
 		frame = 1
 	} else if (d < 1e-3) {
 		frame = Math.floor(time / 30) % 2
