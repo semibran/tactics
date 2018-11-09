@@ -534,6 +534,8 @@ export function render(view, game) {
 
 	if (cache.attack) {
 		if (!viewport.shake && !(anim && anim.type === "attack")) {
+			cursor.cell = cache.attack.attacker.unit.cell.slice()
+			cursor.prev = cursor.cell.slice()
 			cache.attack = null
 		} else if (viewport.shake) {
 			let attacker = cache.attack.attacker.unit
@@ -725,6 +727,8 @@ export function render(view, game) {
 			dialogs.length = 0
 			anim.done = true
 			anims.push(Anim("attack", cached, Anims.attack(unit.cell, target.cell)))
+			let jndex = game.phase.pending.indexOf(unit)
+			game.phase.pending.splice(jndex, 1)
 		}
 	} else {
 		cache.dialogs.forecast = null
@@ -732,8 +736,8 @@ export function render(view, game) {
 
 	let objective = cache.dialogs.objective
 	if (!objective) {
-		let title = sprites.ui.TextBox([ "OBJECTIVE" ])
-		let body = sprites.ui.TextBox([ "Rout the enemy" ])
+		let title = sprites.ui.TextBox("OBJECTIVE")
+		let body = sprites.ui.TextBox("Rout the enemy")
 		objective = cache.dialogs.objective = {
 			flipped: false,
 			title: {
@@ -863,6 +867,7 @@ function renderUnits(layers, sprites, game, view) {
 		let sprite = sprites[unit.faction][symbols[unit.type]]
 		if (!game.phase.pending.includes(real)
 		&& game.phase.faction === unit.faction
+		&& !(anim && anim.target === unit && (anim.type === "move" || anim.type === "attack"))
 		) {
 			sprite = sprites.done[unit.faction][symbols[unit.type]]
 		}
