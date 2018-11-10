@@ -39,6 +39,7 @@ export function create(width, height, sprites) {
 				target: null,
 				shake: 0
 			},
+			menu: null,
 			dialogs: []
 		},
 		cache: {
@@ -52,6 +53,10 @@ export function create(width, height, sprites) {
 			units: null,
 			ranges: [],
 			squares: [],
+			menu: {
+				box: null,
+				labels: []
+			},
 			dialogs: {
 				objective: null,
 				selection: null,
@@ -147,9 +152,12 @@ export function render(view, game) {
 		viewport.target = []
 	}
 
+	let actions = dialog && dialog.type === "actions" && dialog
+	let forecast = dialog && dialog.type === "forecast" && dialog
+
 	let focus = null
-	if (dialog && dialog.type === "forecast" && !cache.moved) {
-		let target = dialog.targets[dialog.index]
+	if (forecast && !cache.moved) {
+		let target = dialog.options[dialog.index]
 		focus = target.cell
 	} else if (!cursor.selection || !game.phase.pending.includes(cursor.selection.unit) || cache.moved) {
 		focus = cursor.cell
@@ -159,14 +167,16 @@ export function render(view, game) {
 
 	if (focus) {
 		let width = Map.width(map) * 16
-		if (width > viewport.size[0] || dialog && dialog.type === "forecast") {
+		if (width > viewport.size[0] || forecast) {
 			viewport.target[0] = focus[0] * 16 + 8 - viewport.size[0] / 2
-			let max = width - viewport.size[0]
-			if (width > viewport.size[0]) {
-				if (viewport.target[0] < 0) {
-					viewport.target[0] = 0
-				} else if (viewport.target[0] > max) {
-					viewport.target[0] = max
+			if (!forecast) {
+				let max = width - viewport.size[0]
+				if (width > viewport.size[0]) {
+					if (viewport.target[0] < 0) {
+						viewport.target[0] = 0
+					} else if (viewport.target[0] > max) {
+						viewport.target[0] = max
+					}
 				}
 			}
 		} else {
@@ -174,14 +184,16 @@ export function render(view, game) {
 		}
 
 		let height = Map.height(map) * 16
-		if (height > viewport.size[1] || dialog && dialog.type === "forecast") {
+		if (height > viewport.size[1] || forecast) {
 			viewport.target[1] = focus[1] * 16 + 8 - viewport.size[1] / 2
-			let may = height - viewport.size[1]
-			if (height > viewport.size[1]) {
-				if (viewport.target[1] < 0) {
-					viewport.target[1] = 0
-				} else if (viewport.target[1] > may) {
-					viewport.target[1] = may
+			if (!forecast) {
+				let may = height - viewport.size[1]
+				if (height > viewport.size[1]) {
+					if (viewport.target[1] < 0) {
+						viewport.target[1] = 0
+					} else if (viewport.target[1] > may) {
+						viewport.target[1] = may
+					}
 				}
 			}
 		} else {
@@ -263,7 +275,6 @@ export function render(view, game) {
 
 		if (cache.selection && cache.selection !== cursor.selection) {
 			cache.moved = false
-			cache.menu = null
 			if (anim && anim.type === "lift") {
 				anim.done = true
 				anims.push(
@@ -389,6 +400,7 @@ export function render(view, game) {
 					enemies.push(other)
 				}
 			}
+			cache.enemies = enemies
 			if (enemies.length) {
 				options = [ "attack", "wait" ]
 			} else {
@@ -396,18 +408,20 @@ export function render(view, game) {
 			}
 			dialogs.push({
 				type: "actions",
-				data: Menu.create(options),
-				enemies: enemies,
-				box: null,
-				size: [ 16, 16 ],
-				targetSize: null
+				menu: Menu.create(options),
+				box: {
+					image: null,
+					size: [ 16, 16 ],
+					targetSize: null,
+				},
+				cursor: null
 			})
 			if (cache.target) {
 				let target = cache.target.unit
+				let index = enemies.indexOf(target)
 				dialogs.unshift({
 					type: "forecast",
-					index: enemies.indexOf(target),
-					targets: enemies
+					menu: Menu.create(enemies, index)
 				})
 				cursor.cell = target.cell.slice()
 				cursor.prev = target.cell.slice()
@@ -415,8 +429,6 @@ export function render(view, game) {
 		}
 	}
 
-	let menu = dialog && dialog.type === "actions" && dialog
-	let forecast = dialog && dialog.type === "forecast" && dialog
 	let relative = cursor.cell[1] * 16 + 8 - viewport.target[1]
 	let below = relative >= viewport.size[1] / 2
 
@@ -480,7 +492,8 @@ export function render(view, game) {
 	let target = null
 	let targetDialog = cache.dialogs.target
 	if (forecast) {
-		target = forecast.targets[forecast.index]
+		let menu = forecast.menu
+		target = menu.options[menu.index]
 		if (!cache.target) {
 			target = cache.target = { unit: target, time: 0 }
 		} else if (cache.target.unit !== target) {
@@ -496,7 +509,7 @@ export function render(view, game) {
 	}
 
 	if (target && !(cache.target && target !== cache.target)
-	&& !menu
+	&& !actions
 	&& !(forecast && targetDialog && targetDialog.name.position[1] === 8)
 	) {
 		if (!cache.target) {
@@ -586,6 +599,8 @@ export function render(view, game) {
 				let text = power.toString()
 				if (power === 0) {
 					text = "Miss!"
+				} else if (power === 3) {
+					text = "3!!"
 				}
 				value = cache.attack.value = {
 					offset: 0,
@@ -610,9 +625,10 @@ export function render(view, game) {
 		}
 	}
 
-	if (menu) {
-		let selection = menu.data.selection
-		if (selection) {
+	if (actions) {
+		let menu = actions.menu
+		if (menu.done) {
+			let selection = menu.options[menu.index]
 			if (selection === "wait") {
 				let unit = cursor.selection.unit
 				let index = map.units.indexOf(unit)
@@ -622,7 +638,6 @@ export function render(view, game) {
 				cache.selection = null
 				cache.squares.length = 0
 				cache.ranges.length = 0
-				cache.menu = null
 				cache.moved = false
 				anim.done = true
 				anims.push(
@@ -633,55 +648,117 @@ export function render(view, game) {
 			} else if (selection === "attack") {
 				dialogs.unshift({
 					type: "forecast",
-					index: 0,
-					targets: menu.enemies
+					menu: Menu.create(cache.enemies)
 				})
 			}
-		} else {
-			if (!menu.targetSize) {
-				let longest = ""
-				for (let text of menu.data.options) {
-					if (text.length > longest.length) {
-						longest = text
+		}
+	}
+
+	let menu = view.state.menu
+	if (actions || forecast && forecast.menu.options.length > 1) {
+		let data = null
+		if (forecast) {
+			data = forecast.menu
+		} else if (actions) {
+			data = actions.menu
+		}
+
+		if (!menu) {
+			menu = view.state.menu = {
+				data: data,
+				box: {
+					size: [ 0, 0 ],
+					targetSize: null,
+					element: {
+						image: null,
+						position: [ 144, 48 ]
 					}
-				}
-				menu.targetSize = [
-					longest.length * 8 + 36,
-					menu.data.options.length * 16 + 16
-				]
+				},
+				cursor: null
 			}
-			menu.size[0] += (menu.targetSize[0] - menu.size[0]) / 4
-			menu.size[1] += (menu.targetSize[1] - menu.size[1]) / 4
-			let box = sprites.ui.Box(...menu.size.map(Math.round))
-			if (menu.targetSize[0] - menu.size[0] < 4) {
-				let context = box.getContext("2d")
-				for (let i = 0; i < menu.data.options.length; i++) {
-					let text = menu.data.options[i]
-					let label = sprites.ui.Text(text.toUpperCase())
+		}
+
+		let box = menu.box
+		if (menu.data !== data || !box.targetSize) {
+			// menu contents have changed OR no target size is specified
+			// reset contents and recalculate target size
+			cache.menu.labels.length = 0
+			menu.cursor = null
+			menu.data = data
+			let options = data.options
+			if (forecast) {
+				options = options.map(unit => unit.name)
+			}
+			let widest = null
+			for (let option of options) {
+				let image = sprites.ui.Text(option.toUpperCase())
+				if (!widest || image.width > widest.width) {
+					widest = image
+				}
+				cache.menu.labels.push(image)
+			}
+			box.size = [ 0, 0 ]
+			box.targetSize = [
+				widest.width + 36,
+				menu.data.options.length * 16 + 16
+			]
+		}
+		// resize dialog box to target size
+		box.size[0] += (box.targetSize[0] - box.size[0]) / 4
+		box.size[1] += (box.targetSize[1] - box.size[1]) / 4
+	} else {
+		if (menu) {
+			let box = menu.box
+			// shrink box until it hits size [ 0, 0 ]
+			box.size[0] -= Math.min(box.size[0], box.targetSize[0] / 5)
+			box.size[1] -= Math.min(box.size[1], box.targetSize[1] / 5)
+		}
+	}
+
+	if (menu) {
+		let box = menu.box
+		if (box.size[0] && box.size[1]) {
+			// only draw if side lengths are not 0
+			let dist = box.targetSize[0] - box.size[0]
+			box.element.image = sprites.ui.Box(...box.size.map(Math.round))
+			cache.menu.box = box.element.image
+			if (dist < 4) {
+				// box is large enough. draw contents
+				let context = box.element.image.getContext("2d")
+				for (let i = 0; i < cache.menu.labels.length; i++) {
+					let label = cache.menu.labels[i]
 					context.drawImage(label, 24, 12 + i * 16)
 				}
-
 				let symbol = null
 				let option = menu.data.options[menu.data.index]
 				if (option === "attack") {
 					symbol = sprites.ui.symbols.sword
 				} else if (option === "wait") {
 					symbol = sprites.ui.symbols.clock
+				} else if (forecast) {
+					symbol = sprites.ui.symbols.sword
 				}
 
-				let frame = (time % 180) / 180
-				context.drawImage(symbol, 12, 12 + menu.data.index * 16 - Math.sin(2 * Math.PI * frame * 2))
+				if (symbol) {
+					let frame = (time % 180) / 180
+					let offset = Math.sin(2 * Math.PI * frame * 2)
+					let y = 12 + menu.data.index * 16 - offset
+					if (menu.cursor === null) {
+						menu.cursor = y
+					} else {
+						menu.cursor += (y - menu.cursor) / 2
+					}
+					context.drawImage(symbol, 12, menu.cursor)
+				}
 			}
-
-			layers.dialogs.push({
-				image: box,
-				position: [ 144, 32 ]
-			})
+			layers.dialogs.push(box.element)
 		}
 	}
 
+
 	if (forecast) {
-		let target = forecast.targets[forecast.index]
+		let menu = forecast.menu
+		let target = menu.options[menu.index]
 		if (!cache.dialogs.forecast) {
 			let text = sprites.ui.Text("COMBAT FORECAST")
 			let box = sprites.ui.Box(text.width + 28, 24)
@@ -771,7 +848,7 @@ export function render(view, game) {
 			}
 		}
 
-		if (dialog.done) {
+		if (menu.done) {
 			let power = Unit.dmg(unit, target)
 			let damage = Math.min(target.hp, power)
 			cache.attack = {
@@ -797,7 +874,16 @@ export function render(view, game) {
 			)
 		}
 	} else {
-		cache.dialogs.forecast = null
+		let dialog = cache.dialogs.forecast
+		if (dialog) {
+			let title = dialog.title
+			if (title.position[0] > -title.image.width) {
+				title.position[0] -= Math.max(16, -title.image.width - title.position[0])
+				layers.dialogs.push(title)
+			} else {
+				cache.dialogs.forecast = null
+			}
+		}
 	}
 
 	let objective = cache.dialogs.objective
@@ -871,15 +957,20 @@ export function render(view, game) {
 
 	layers.dialogs.push(title, body)
 
-	if (!cache.attack
-	&& (!(dialog && dialog.type === "actions") && !cache.moved
-	|| (dialog && dialog.type === "forecast"))
-) {
-		renderCursor(layers, sprites.ui.cursor, cursor, view)
-	}
+	if (cache.attack && cache.attack.power === 3 && cache.attack.time === 7) {
+		context.fillStyle = "white"
+		context.fillRect(0, 0, context.canvas.width, context.canvas.height)
+	} else {
+		if (!cache.attack
+		&& (!(dialog && dialog.type === "actions") && !cache.moved
+		|| (dialog && dialog.type === "forecast"))
+	) {
+			renderCursor(layers, sprites.ui.cursor, cursor, view)
+		}
 
-	renderUnits(layers, sprites.pieces, game, view)
-	renderLayers(layers, order, viewport, context)
+		renderUnits(layers, sprites.pieces, game, view)
+		renderLayers(layers, order, viewport, context)
+	}
 
 	if (!anims.length) {
 		if (cache.phase.faction !== game.phase.faction) {

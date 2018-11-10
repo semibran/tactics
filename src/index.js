@@ -30,11 +30,7 @@ function main(spritesheet) {
 		let dialogs = view.state.dialogs
 		let dialog = dialogs[0]
 		if (dialog) {
-			if (dialog.type === "actions") {
-				Menu.update(dialog.data, keys)
-			} else if (dialog.type === "forecast") {
-				Forecast.update(dialog, keys)
-			}
+			Menu.update(dialog.menu, keys)
 		} else if (!view.cache.attack && !view.cache.moved) {
 			Cursor.update(cursor, keys, game, view)
 		}
@@ -45,15 +41,15 @@ function main(spritesheet) {
 				if (dialog) {
 					if (dialog.type === "actions") {
 						let unit = view.state.cursor.selection.unit
-						view.cache.units[game.map.units.indexOf(unit)].cell = unit.cell
-						view.cache.menu = null
+						let index = game.map.units.indexOf(unit)
+						view.cache.units[index].cell = unit.cell
 						view.cache.moved = null
 					}
 					dialogs.shift()
 					if (dialogs.length) {
 						dialog = dialogs[0]
 						if (dialog.type === "actions") {
-							dialog.data.selection = 0
+							dialog.menu.done = false
 						}
 					}
 				} else {

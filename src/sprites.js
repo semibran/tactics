@@ -241,12 +241,11 @@ function ui(sprites) {
 		}
 
 		for (let y = 1; y < rows - 1; y++) {
-			context.drawImage(ui.box.left,           0, y * 16)
-			context.drawImage(ui.box.right, width - 16, y * 16)
-
 			for (let x = 1; x < cols - 1; x++) {
 				context.drawImage(ui.box.center, x * 16, y * 16)
 			}
+			context.drawImage(ui.box.left,           0, y * 16)
+			context.drawImage(ui.box.right, width - 16, y * 16)
 		}
 
 		context.drawImage(ui.box.topLeft,                     0,                  0)

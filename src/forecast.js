@@ -21,9 +21,9 @@ export function update(forecast, keys) {
 export function cycle(forecast, reverse) {
 	if (reverse) {
 		if (--forecast.index < 0) {
-			forecast.index = forecast.targets.length - 1
+			forecast.index = forecast.options.length - 1
 		}
-	} else if (++forecast.index >= forecast.targets.length) {
+	} else if (++forecast.index >= forecast.options.length) {
 		forecast.index = 0
 	}
 }

@@ -2,26 +2,32 @@ export function create(options, index) {
 	return {
 		options: options,
 		index: index || 0,
-		selection: false
+		done: false
 	}
 }
 
 export function update(menu, keys) {
 	let { held, prev } = keys
 	if (held.confirm && !prev.confirm) {
-		menu.selection = menu.options[menu.index]
+		menu.done = true
 	}
-	if (!menu.selection) {
-		if (held.up && !prev.up && !held.down) {
-			if (--menu.index < 0) {
-				menu.index = 0
-			}
+	if (!menu.done) {
+		if (held.select && !prev.select) {
+			cycle(menu, held.mod)
+		} else if (held.up && !prev.up && !held.down) {
+			cycle(menu, true)
+		} else if (held.down && !prev.down && !held.up) {
+			cycle(menu)
 		}
-		if (held.down && !prev.down && !held.up) {
-			let max = menu.options.length - 1
-			if (++menu.index > max) {
-				menu.index = max
-			}
+	}
+}
+
+export function cycle(menu, reverse) {
+	if (reverse) {
+		if (--menu.index < 0) {
+			menu.index = menu.options.length - 1
 		}
+	} else if (++menu.index >= menu.options.length) {
+		menu.index = 0
 	}
 }
