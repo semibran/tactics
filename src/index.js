@@ -43,7 +43,9 @@ function main(spritesheet) {
 			let anim = view.state.anims[0]
 			if (!anim || anim.type !== "move") {
 				if (dialog) {
-					if (dialog.type === "actions") {
+					if (dialog.type === "pause") {
+						view.state.paused = false
+					} else if (dialog.type === "actions") {
 						let unit = view.state.cursor.selection.unit
 						let index = game.map.units.indexOf(unit)
 						view.cache.units[index].cell = unit.cell
@@ -57,7 +59,11 @@ function main(spritesheet) {
 						}
 					}
 				} else {
-					Cursor.deselect(cursor)
+					if (cursor.selection) {
+						Cursor.deselect(cursor)
+					} else if (!anim || anim.type !== "phase") {
+						view.state.paused = true
+					}
 				}
 			}
 		}

@@ -42,6 +42,7 @@ export function create(width, height, sprites) {
 				shake: 0
 			},
 			menu: null,
+			paused: false,
 			dialogs: []
 		},
 		cache: {
@@ -152,6 +153,7 @@ export function render(view, game) {
 
 	let actions = dialog && dialog.type === "actions" && dialog
 	let forecast = dialog && dialog.type === "forecast" && dialog
+	let pause = dialog && dialog.type === "pause" && dialog
 	let phasing = anim && anim.type === "phase"
 	let focus = null
 	if (!phasing || !viewport.target) {
@@ -412,13 +414,7 @@ export function render(view, game) {
 			}
 			dialogs.push({
 				type: "actions",
-				menu: Menu.create(options),
-				box: {
-					image: null,
-					size: [ 16, 16 ],
-					targetSize: null,
-				},
-				cursor: null
+				menu: Menu.create(options)
 			})
 			if (cache.target) {
 				let target = cache.target.unit
@@ -433,6 +429,25 @@ export function render(view, game) {
 		}
 	}
 
+	if (view.state.paused) {
+		if (!dialogs.length) {
+			dialogs.push({
+				type: "pause",
+				menu: Menu.create([ "end turn" ])
+			})
+		} else {
+			let menu = pause.menu
+			if (menu.done) {
+				let option = menu.options[menu.index]
+				if (option === "end turn") {
+					Game.nextPhase(game)
+				}
+				view.state.paused = false
+				dialogs.shift()
+			}
+		}
+	}
+
 	let relative = cursor.cell[1] * 16 + 8 - viewport.target[1]
 	let below = relative >= viewport.size[1] / 2
 
@@ -440,7 +455,7 @@ export function render(view, game) {
 	let selected = cursor.selection || (cache.attack && cache.attack.attacker) || cursor.under
 	let selectionDialog = cache.dialogs.selection
 	if (selected && !(cache.selected && selected !== cache.selected)
-	&& !phasing
+	&& !phasing && !pause
 	&& !(forecast && selectionDialog && selectionDialog.name.position[1] === 8)
 	&& (!selectionDialog || forecast || cache.attack || (
 		!(below && selectionDialog && selectionDialog.name.position[1] !== 8)
@@ -666,14 +681,15 @@ export function render(view, game) {
 	}
 
 	let menu = view.state.menu
-	if (actions || forecast && forecast.menu.options.length > 1) {
+	if (pause || actions || forecast && forecast.menu.options.length > 1) {
 		let data = null
-		if (forecast) {
+		if (pause) {
+			data = pause.menu
+		} else if (forecast) {
 			data = forecast.menu
 		} else if (actions) {
 			data = actions.menu
 		}
-
 		if (!menu) {
 			menu = view.state.menu = {
 				data: data,
@@ -721,8 +737,10 @@ export function render(view, game) {
 		if (menu) {
 			let box = menu.box
 			// shrink box until it hits size [ 0, 0 ]
-			box.size[0] -= Math.min(box.size[0], box.targetSize[0] / 5)
-			box.size[1] -= Math.min(box.size[1], box.targetSize[1] / 5)
+			if (box.size[0]) {
+				box.size[0] -= Math.min(box.size[0], box.targetSize[0] / 5)
+				box.size[1] -= Math.min(box.size[1], box.targetSize[1] / 5)
+			}
 		}
 	}
 
@@ -744,7 +762,7 @@ export function render(view, game) {
 				let option = menu.data.options[menu.data.index]
 				if (option === "attack") {
 					symbol = sprites.ui.symbols.sword
-				} else if (option === "wait") {
+				} else if (option === "wait" || option === "end turn") {
 					symbol = sprites.ui.symbols.clock
 				} else if (forecast) {
 					symbol = sprites.ui.symbols.sword
@@ -923,9 +941,8 @@ export function render(view, game) {
 	}
 
 	let { title, body } = objective
-	if (!cursor.selection
-	&& !cursor.under
-	&& !cache.attack
+	if (!cursor.selection && !cursor.under
+	&& !cache.attack && !pause
 	&& Cell.manhattan(cursor.cell, cursor.prev) < 1e-3
 	&& (below === (title.position[1] === 8)
 		|| title.position[0] === viewport.size[0]
