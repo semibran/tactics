@@ -157,7 +157,11 @@ export function render(view, game) {
 	let phasing = anim && anim.type === "phase"
 	let focus = null
 	if (!phasing || !viewport.target) {
-		if (forecast && !cache.moved) {
+		if (anim && anim.type === "fade") {
+			focus = anim.target.cell
+		} else if (cache.attack) {
+			focus = cache.attack.target.cell
+		} else if (forecast && !cache.moved) {
 			let target = dialog.options[dialog.index]
 			focus = target.cell
 		} else if (!cursor.selection || !game.phase.pending.includes(cursor.selection.unit) || cache.moved) {
@@ -172,10 +176,11 @@ export function render(view, game) {
 	}
 
 	if (focus) {
+		let priority = forecast || cache.attack || anim && anim.type === "fade"
 		let width = Map.width(map) * 16
-		if (width > viewport.size[0] || forecast) {
+		if (width > viewport.size[0] || priority) {
 			viewport.target[0] = focus[0] * 16 + 8 - viewport.size[0] / 2
-			if (!forecast) {
+			if (!priority) {
 				let max = width - viewport.size[0]
 				if (width > viewport.size[0]) {
 					if (viewport.target[0] < 0) {
@@ -190,9 +195,9 @@ export function render(view, game) {
 		}
 
 		let height = Map.height(map) * 16
-		if (height > viewport.size[1] || forecast) {
+		if (height > viewport.size[1] || priority) {
 			viewport.target[1] = focus[1] * 16 + 8 - viewport.size[1] / 2
-			if (!forecast) {
+			if (!priority) {
 				let may = height - viewport.size[1]
 				if (height > viewport.size[1]) {
 					if (viewport.target[1] < 0) {
@@ -365,16 +370,18 @@ export function render(view, game) {
 			&& Cell.manhattan(dest, target.cell) > unit.equipment.weapon.rng
 			) {
 				let neighbors = Cell.neighborhood(target.cell, unit.equipment.weapon.rng)
-				for (var i = path.length; i--;) {
-					let cell = path[i]
-					if (target) {
-						if (neighbors.find(neighbor => Cell.equals(cell, neighbor))) {
-							path.splice(i + 1, path.length - i - 1)
-							break
+				if (path) {
+					for (var i = path.length; i--;) {
+						let cell = path[i]
+						if (target) {
+							if (neighbors.find(neighbor => Cell.equals(cell, neighbor))) {
+								path.splice(i + 1, path.length - i - 1)
+								break
+							}
 						}
 					}
 				}
-				if (i === -1) {
+				if (!path || i === -1) {
 					let dest = null
 					for (let i = 0; i < range.move.length; i++) {
 						let cell = range.move[i]
@@ -452,13 +459,13 @@ export function render(view, game) {
 	let below = relative >= viewport.size[1] / 2
 
 	// primary dialog, for hovered units and selections
-	let selected = cursor.selection || (cache.attack && cache.attack.attacker) || cursor.under
+	let selected = cursor.selection || (cache.attack && cache.attack.attacker) || (anim && anim.type === "fade" && cache.selected) || cursor.under
 	let selectionDialog = cache.dialogs.selection
 	if (selected && !(cache.selected && selected !== cache.selected)
 	&& !phasing && !pause
 	&& !(forecast && selectionDialog && selectionDialog.name.position[1] === 8)
-	&& (!selectionDialog || forecast || cache.attack || (
-		!(below && selectionDialog && selectionDialog.name.position[1] !== 8)
+	&& (!selectionDialog || forecast || cache.attack || anim && anim.type === "fade" || (
+		!(below && !forecast && selectionDialog && selectionDialog.name.position[1] !== 8)
 		&& !(!below && selectionDialog && selectionDialog.name.position[1] === 8)
 		))
 	) {
@@ -525,7 +532,7 @@ export function render(view, game) {
 			target = cache.target
 		}
 		cursor.cell = target.unit.cell.slice()
-	} else if (cache.attack) {
+	} else if (cache.attack || anim && anim.type === "fade") {
 		target = cache.target
 	} else if (cursor.selection && cursor.under && cursor.selection !== cursor.under && !Unit.allied(cursor.selection.unit, cursor.under.unit)) {
 		target = cursor.under
@@ -762,8 +769,10 @@ export function render(view, game) {
 				let option = menu.data.options[menu.data.index]
 				if (option === "attack") {
 					symbol = sprites.ui.symbols.sword
-				} else if (option === "wait" || option === "end turn") {
+				} else if (option === "wait") {
 					symbol = sprites.ui.symbols.clock
+				} else if (option === "end turn") {
+					symbol = sprites.ui.symbols.next
 				} else if (forecast) {
 					symbol = sprites.ui.symbols.sword
 				}
@@ -1119,7 +1128,7 @@ function renderUnits(layers, sprites, game, view) {
 	let anim = anims[0]
 	for (let i = 0; i < cache.units.length; i++) {
 		let unit = cache.units[i]
-		let real = map.units[i]
+		let real = unit.original
 		let cell = unit.cell
 		let x = cell[0] * 16
 		let y = cell[1] * 16
@@ -1132,7 +1141,7 @@ function renderUnits(layers, sprites, game, view) {
 		) {
 			sprite = sprites.done[unit.faction][symbols[unit.type]]
 		}
-		if (unit.original === real) {
+		if (map.units[i] === real) {
 			if (!Cell.equals(unit.cell, real.cell)
 			&& !cache.moved
 			) {

@@ -35,6 +35,7 @@ function main(spritesheet) {
 		} else if (!view.cache.attack
 		&& !view.cache.moved
 		&& !(anims.length && anims[0].type === "phase")
+		&& !(anims.length && anims[0].type === "fade")
 		) {
 			Cursor.update(cursor, keys, game, view)
 		}
