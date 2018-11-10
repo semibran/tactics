@@ -154,6 +154,10 @@ function ui(sprites) {
 		cursor:  cursor(sprites.cursor),
 		typeface: typeface(sprites.typeface),
 		healthbar: sprites.healthbar,
+		phases: {
+			player: sprites["player-phase"],
+			enemy: sprites["enemy-phase"]
+		},
 		box: {
 			topLeft:     extract(sprites.box,  0,  0, 16, 16),
 			top:         extract(sprites.box, 16,  0, 16, 16),

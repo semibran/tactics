@@ -27,11 +27,15 @@ function main(spritesheet) {
 
 		let { held, prev } = keys
 		let cursor = view.state.cursor
+		let anims = view.state.anims
 		let dialogs = view.state.dialogs
 		let dialog = dialogs[0]
 		if (dialog) {
 			Menu.update(dialog.menu, keys)
-		} else if (!view.cache.attack && !view.cache.moved) {
+		} else if (!view.cache.attack
+		&& !view.cache.moved
+		&& !(anims.length && anims[0].type === "phase")
+		) {
 			Cursor.update(cursor, keys, game, view)
 		}
 

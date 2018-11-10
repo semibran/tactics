@@ -8,6 +8,8 @@ import Canvas from "../lib/canvas"
 import Anims from "./anims"
 import Anim from "./anim"
 
+const blue = "rgb(80, 120, 248)"
+const red = "rgb(208, 0, 88)"
 const symbols = {
 	warrior: "axe",
 	knight: "shield",
@@ -25,7 +27,7 @@ export function create(width, height, sprites) {
 		context: canvas.getContext("2d"),
 		state: {
 			time: 0,
-			anims: [],
+			anims: [ Anim("phase", "player", Anims.phase()) ],
 			cursor: {
 				cell: null,
 				prev: null,
@@ -49,7 +51,7 @@ export function create(width, height, sprites) {
 			target: null,
 			moved: false,
 			attack: null,
-			phase: { pending: [], faction: "player" },
+			phase: { pending: null, faction: "player" },
 			units: null,
 			ranges: [],
 			squares: [],
@@ -112,7 +114,7 @@ export function render(view, game) {
 		"cursor",
 		"selection",
 		"damage",
-		"dialogs"
+		"ui"
 	]
 
 	let layers = {}
@@ -148,21 +150,23 @@ export function render(view, game) {
 		cursor.prev = cursor.cell.slice()
 	}
 
-	if (!viewport.target) {
-		viewport.target = []
-	}
-
 	let actions = dialog && dialog.type === "actions" && dialog
 	let forecast = dialog && dialog.type === "forecast" && dialog
-
+	let phasing = anim && anim.type === "phase"
 	let focus = null
-	if (forecast && !cache.moved) {
-		let target = dialog.options[dialog.index]
-		focus = target.cell
-	} else if (!cursor.selection || !game.phase.pending.includes(cursor.selection.unit) || cache.moved) {
-		focus = cursor.cell
-	} else if (cursor.selection && game.phase.pending.includes(cursor.selection.unit)) {
-		focus = cursor.selection.unit.cell
+	if (!phasing || !viewport.target) {
+		if (forecast && !cache.moved) {
+			let target = dialog.options[dialog.index]
+			focus = target.cell
+		} else if (!cursor.selection || !game.phase.pending.includes(cursor.selection.unit) || cache.moved) {
+			focus = cursor.cell
+		} else if (cursor.selection && game.phase.pending.includes(cursor.selection.unit)) {
+			focus = cursor.selection.unit.cell
+		}
+	}
+
+	if (!viewport.target) {
+		viewport.target = []
 	}
 
 	if (focus) {
@@ -436,6 +440,7 @@ export function render(view, game) {
 	let selected = cursor.selection || (cache.attack && cache.attack.attacker) || cursor.under
 	let selectionDialog = cache.dialogs.selection
 	if (selected && !(cache.selected && selected !== cache.selected)
+	&& !phasing
 	&& !(forecast && selectionDialog && selectionDialog.name.position[1] === 8)
 	&& (!selectionDialog || forecast || cache.attack || (
 		!(below && selectionDialog && selectionDialog.name.position[1] !== 8)
@@ -474,7 +479,7 @@ export function render(view, game) {
 				details.hp.position[0] += (8 - details.hp.position[0]) / 8
 			}
 		}
-		layers.dialogs.push(details.name, details.hp)
+		layers.ui.push(details.name, details.hp)
 	} else if (cache.selected) {
 		let unit = cache.selected.unit
 		let details = cache.dialogs.selection
@@ -488,7 +493,7 @@ export function render(view, game) {
 			cache.dialogs.selection = null
 			cache.selected = null
 		}
-		layers.dialogs.push(details.name, details.hp)
+		layers.ui.push(details.name, details.hp)
 	}
 
 	// secondary dialog, for targets
@@ -549,7 +554,7 @@ export function render(view, game) {
 				box.position[0] += (viewport.size[0] - box.image.width - 8 - box.position[0]) / 8
 			}
 		}
-		layers.dialogs.push(details.name, details.hp)
+		layers.ui.push(details.name, details.hp)
 	} else if (cache.target) {
 		let unit = cache.target.unit
 		let details = cache.dialogs.target
@@ -563,7 +568,7 @@ export function render(view, game) {
 			cache.dialogs.target = null
 			cache.target = null
 		}
-		layers.dialogs.push(details.name, details.hp)
+		layers.ui.push(details.name, details.hp)
 	}
 
 	// attack animation
@@ -591,7 +596,7 @@ export function render(view, game) {
 			let duration = 15
 			if (time <= 7 + duration) {
 				progress = (time - 7) / duration
-				context.fillStyle = "rgb(208, 0, 88)"
+				context.fillStyle = red
 			} else if (time >= 7 + duration * 2 && time <= 7 + duration * 3) {
 				progress = (cache.attack.time - 7 - duration * 2) / duration
 				context.fillStyle = "black"
@@ -757,7 +762,7 @@ export function render(view, game) {
 					context.drawImage(symbol, 12, menu.cursor)
 				}
 			}
-			layers.dialogs.push(box.element)
+			layers.ui.push(box.element)
 		}
 	}
 
@@ -769,7 +774,7 @@ export function render(view, game) {
 			let text = sprites.ui.Text("COMBAT FORECAST")
 			let box = sprites.ui.Box(text.width + 28, 24)
 			let context = box.getContext("2d")
-			let symbol = sprites.ui.symbols.sword
+			let symbol = sprites.ui.symbols.eye
 			context.drawImage(symbol, 8, 8)
 			context.drawImage(text, 20, 8)
 			cache.dialogs.forecast = {
@@ -781,7 +786,7 @@ export function render(view, game) {
 		}
 		let title = cache.dialogs.forecast.title
 		title.position[0] += (8 - title.position[0]) / 8
-		layers.dialogs.push(title)
+		layers.ui.push(title)
 
 		let unit = cursor.selection.unit
 		let index = map.units.indexOf(unit)
@@ -821,7 +826,7 @@ export function render(view, game) {
 				let context = Canvas(damage * n, 2)
 				context.fillStyle = `rgb(${a}, ${a}, ${a})`
 				context.fillRect(0, 0, context.canvas.width, context.canvas.height)
-				layers.dialogs.push({
+				layers.ui.push({
 					image: context.canvas,
 					position: [
 						targetDialog.hp.position[0] + x + (target.hp - damage) * n,
@@ -843,7 +848,7 @@ export function render(view, game) {
 					let context = Canvas(damage * n, 2)
 					context.fillStyle = `rgb(${a}, ${a}, ${a})`
 					context.fillRect(0, 0, context.canvas.width, context.canvas.height)
-					layers.dialogs.push({
+					layers.ui.push({
 						image: context.canvas,
 						position: [
 							unitDialog.hp.position[0] + x + (unit.hp - damage) * n,
@@ -885,7 +890,7 @@ export function render(view, game) {
 			let title = dialog.title
 			if (title.position[0] > -title.image.width) {
 				title.position[0] -= Math.max(16, -title.image.width - title.position[0])
-				layers.dialogs.push(title)
+				layers.ui.push(title)
 			} else {
 				cache.dialogs.forecast = null
 			}
@@ -963,16 +968,52 @@ export function render(view, game) {
 		}
 	}
 
-	layers.dialogs.push(title, body)
+	layers.ui.push(title, body)
+
+	if (phasing) {
+		let x = 0
+		let data = anim.data
+		let text = sprites.ui.phases[anim.target]
+		if (data.state === "enter") {
+			let origin = -text.width
+			let target = viewport.size[0] / 2 - text.width / 2 - 3
+			x = data.text.x * (target - origin) + origin
+		} else if (data.state === "pass") {
+			let origin = viewport.size[0] / 2 - text.width / 2 - 3
+			x = data.text.x * 6 + origin
+		} else if (data.state === "exit") {
+			let origin = viewport.size[0] / 2 - text.width / 2 + 3
+			let target = viewport.size[0]
+			x = data.text.x * (target - origin) + origin
+		}
+
+		let bg = Canvas(256 * (data.bg.width - data.bg.x), 2 + 10 * data.bg.height)
+		bg.fillStyle = anim.target === "player"
+			? blue
+			: red
+		bg.fillRect(0, 0, bg.canvas.width, bg.canvas.height)
+
+		if (bg.canvas.width) {
+			layers.ui.push({
+				image: bg.canvas,
+				position: [ data.bg.x * 256, viewport.size[1] / 2 - bg.canvas.height / 2 ]
+			})
+		}
+
+		layers.ui.push({
+			image: text,
+			position: [ x, viewport.size[1] / 2 - text.height / 2 ]
+		})
+	}
 
 	if (cache.attack && cache.attack.power === 3 && cache.attack.time === 7) {
 		context.fillStyle = "white"
 		context.fillRect(0, 0, context.canvas.width, context.canvas.height)
 	} else {
 		if (!cache.attack
-		&& (!(dialog && dialog.type === "actions") && !cache.moved
-		|| (dialog && dialog.type === "forecast"))
-	) {
+		&& !phasing
+		&& (!actions && !cache.moved || forecast)
+		) {
 			renderCursor(layers, sprites.ui.cursor, cursor, view)
 		}
 
@@ -980,9 +1021,10 @@ export function render(view, game) {
 		renderLayers(layers, order, viewport, context)
 	}
 
-	if (!anims.length) {
+	if (!anims.length || !cache.phase.pending) {
 		if (cache.phase.faction !== game.phase.faction) {
 			cursor.cell = game.phase.pending[0].cell.slice()
+			anims.push(Anim("phase", game.phase.faction, Anims.phase()))
 		}
 		cache.phase = {
 			pending: game.phase.pending.slice(),
@@ -1066,7 +1108,8 @@ function renderUnits(layers, sprites, game, view) {
 		let y = cell[1] * 16
 		let z = 0
 		let sprite = sprites[unit.faction][symbols[unit.type]]
-		if (!cache.phase.pending.includes(real)
+		if (cache.phase.pending
+		&& !cache.phase.pending.includes(real)
 		&& cache.phase.faction === unit.faction
 		&& !(anim && anim.target === unit && (anim.type === "move" || anim.type === "attack"))
 		) {
@@ -1151,12 +1194,14 @@ function renderCursor(layers, sprites, cursor, view) {
 function renderLayers(layers, order, viewport, context) {
 	for (let name of order) {
 		let layer = layers[name]
-		layer.sort((a, b) => a.position[1] - b.position[1])
+		if (name !== "ui") {
+			layer.sort((a, b) => a.position[1] - b.position[1])
+		}
 
 		for (let element of layer) {
 			let x = Math.round(element.position[0])
 			let y = Math.round(element.position[1] - (element.position[2] || 0))
-			if (name !== "dialogs") {
+			if (name !== "ui") {
 				x -= (viewport.position[0] + viewport.offset[0])
 				y -= (viewport.position[1] + viewport.offset[1])
 			}
