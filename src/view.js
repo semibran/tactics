@@ -415,18 +415,25 @@ export function render(view, game) {
 		}
 	}
 
+	let menu = dialog && dialog.type === "actions" && dialog
+	let forecast = dialog && dialog.type === "forecast" && dialog
+	let relative = cursor.cell[1] * 16 + 8 - viewport.target[1]
+	let below = relative >= viewport.size[1] / 2
+
+	// primary dialog, for hovered units and selections
 	let selected = cursor.selection || (cache.attack && cache.attack.attacker) || cursor.under
+	let selectionDialog = cache.dialogs.selection
 	if (selected && !(cache.selected && selected !== cache.selected)
-	&& !(dialog && dialog.type === "forecast" && cache.dialogs.selection && cache.dialogs.selection.name.position[1] === 8)
+	&& !(forecast && selectionDialog && selectionDialog.name.position[1] === 8)
+	&& (!selectionDialog || forecast || cache.attack || !(below && selectionDialog && selectionDialog.name.position[1] !== 8))
 	) {
 		if (!cache.selected) {
 			cache.selected = selected
 		}
 		let unit = selected.unit
-		let below = unit.cell[1] * 16 + 8 - viewport.position[1] >= viewport.size[1] / 2
 		if (!cache.dialogs.selection) {
 			let y = viewport.size[1] - 68
-			if (below && !(dialog && dialog.type === "forecast")) {
+			if (below && !forecast) {
 				y = 0
 			}
 
@@ -469,9 +476,11 @@ export function render(view, game) {
 		layers.dialogs.push(details.name, details.hp)
 	}
 
+	// secondary dialog, for targets
 	let target = null
-	if (dialog && dialog.type === "forecast") {
-		target = dialog.targets[dialog.index]
+	let targetDialog = cache.dialogs.target
+	if (forecast) {
+		target = forecast.targets[forecast.index]
 		if (!cache.target) {
 			target = cache.target = { unit: target, time: 0 }
 		} else if (cache.target.unit !== target) {
@@ -487,17 +496,16 @@ export function render(view, game) {
 	}
 
 	if (target && !(cache.target && target !== cache.target)
-	&& !(dialog && dialog.type === "actions")
-	&& !(dialog && dialog.type === "forecast" && cache.dialogs.target && cache.dialogs.target.name.position[1] === 8)
+	&& !menu
+	&& !(forecast && targetDialog && targetDialog.name.position[1] === 8)
 	) {
 		if (!cache.target) {
 			cache.target = target
 		}
 		let unit = target.unit
-		let below = unit.cell[1] * 16 + 8 - viewport.position[1] >= viewport.size[1] / 2
 		if (!cache.dialogs.target) {
 			let y = viewport.size[1] - 68
-			if (below && !(dialog && dialog.type === "forecast")) {
+			if (below && !forecast) {
 				y = 0
 			}
 
@@ -541,6 +549,8 @@ export function render(view, game) {
 		layers.dialogs.push(details.name, details.hp)
 	}
 
+	// attack animation
+	// TODO: modularize
 	if (cache.attack) {
 		let attacker = cache.attack.attacker.unit
 		let target = cache.attack.target.unit
@@ -600,8 +610,7 @@ export function render(view, game) {
 		}
 	}
 
-	if (dialog && dialog.type === "actions") {
-		let menu = dialog
+	if (menu) {
 		let selection = menu.data.selection
 		if (selection) {
 			if (selection === "wait") {
@@ -671,8 +680,8 @@ export function render(view, game) {
 		}
 	}
 
-	if (dialog && dialog.type === "forecast") {
-		let target = dialog.targets[dialog.index]
+	if (forecast) {
+		let target = forecast.targets[forecast.index]
 		if (!cache.dialogs.forecast) {
 			let text = sprites.ui.Text("COMBAT FORECAST")
 			let box = sprites.ui.Box(text.width + 28, 24)
@@ -794,9 +803,10 @@ export function render(view, game) {
 	let objective = cache.dialogs.objective
 	if (!objective) {
 		let title = sprites.ui.TextBox("OBJECTIVE")
-		let body = sprites.ui.TextBox("Rout the enemy")
+		let body = sprites.ui.TextBox("Defeat all enemies")
 		objective = cache.dialogs.objective = {
-			flipped: false,
+			lastUpdate: null,
+			time: 0,
 			title: {
 				image: title,
 				position: [ viewport.size[0], viewport.size[1] - title.height - 36 ]
@@ -808,33 +818,58 @@ export function render(view, game) {
 		}
 	}
 
-	let { title, body } = objective
-	if (!cursor.selection) {
-		title.position[0] += ((viewport.size[0] - title.image.width - 8) - title.position[0]) / 8
-		body.position[0] += ((viewport.size[0] - body.image.width - 8) - body.position[0]) / 8
-	} else if (title.position[0] < viewport.size[0]
-	|| body.position[0] < viewport.size[0]
-	) {
-		title.position[0] += Math.min(16, viewport.size[0] - title.position[0])
-		body.position[0] += Math.min(16, viewport.size[0] - body.position[0])
+	if (map.units.length !== objective.lastUpdate) {
+		let enemies = map.units.filter(unit => unit.faction === "enemy")
+		objective.body.image = sprites.ui.TextBox(`Defeat (${enemies.length}) enemies`)
+		objective.lastUpdate = enemies.length
 	}
 
-	/*let threshold = Map.height(map) - viewport.size[1] / 32
-	if (cursor.cell[1] > threshold) {
-		if (!objective.flipped && title.position[1] > viewport.size[1] / 2) {
-			title.position[0] += Math.min(16, viewport.size[0] - title.position[0])
-			body.position[0] += Math.min(16, viewport.size[0] - body.position[0])
-			if (title.position[0] >= viewport.size[0]) {
-				objective.flipped = true
-				title.position[1] = 8
-				body.position[1] = 36
-			}
+	let { title, body } = objective
+	if (!cursor.selection
+	&& !cursor.under
+	&& !cache.attack
+	&& (below === (title.position[1] === 8)
+		|| title.position[0] === viewport.size[0]
+		&& body.position[0] === viewport.size[0]
+		)
+	) {
+		if (!objective.time) {
+			objective.time = 1
 		}
 	} else {
+		objective.time = 0
+	}
 
-	}*/
+	let idle = 90
+	if (objective.time) {
+		if (title.position[0] === viewport.size[0]) {
+			if (below) {
+				title.position[1] = 8
+				body.position[1] = 36
+			} else {
+				title.position[1] = viewport.size[1] - title.image.height - 36
+				body.position[1] = viewport.size[1] - body.image.height - 8
+			}
+		}
+		if (++objective.time >= idle) {
+			title.position[0] += ((viewport.size[0] - title.image.width - 8) - title.position[0]) / 8
+		}
+		if (objective.time >= idle + 4) {
+			body.position[0] += ((viewport.size[0] - body.image.width - 8) - body.position[0]) / 8
+		}
+	}
 
-	// layers.dialogs.push(title, body)
+	if (objective.time < idle) {
+		if (title.position[0] < viewport.size[0]
+		|| body.position[0] < viewport.size[0]
+		) {
+			title.position[0] += Math.min(16, viewport.size[0] - title.position[0])
+			body.position[0] += Math.min(16, viewport.size[0] - body.position[0])
+			objective.time = 0
+		}
+	}
+
+	layers.dialogs.push(title, body)
 
 	if (!cache.attack
 	&& (!(dialog && dialog.type === "actions") && !cache.moved

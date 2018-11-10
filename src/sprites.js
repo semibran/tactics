@@ -269,7 +269,7 @@ function ui(sprites) {
 			height = content.length * 8
 		} else {
 			text = Text(content)
-			width = content.length * 8
+			width = text.width
 			height = 8
 		}
 
@@ -416,10 +416,10 @@ function ui(sprites) {
 }
 
 function typeface(image) {
-	const cols = 10
-	const rows = 7
 	const width = 8
 	const height = 8
+	const cols = image.width / width
+	const rows = image.height / height
 	const sequence =
 		`0123456789` +
 		`ABCDEFGHIJ` +
@@ -427,7 +427,8 @@ function typeface(image) {
 		`UVWXYZ,.!?` +
 		`abcdefghij` +
 		`klmnopqrst` +
-		`uvwxyz'"/ `
+		`uvwxyz'"/\\` +
+		`()        `
 
 	let typeface = {}
 	let i = 0

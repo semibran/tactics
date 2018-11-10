@@ -29,10 +29,12 @@ export function update(cursor, keys, game, view) {
 							Unit.move(cached, dest, map)
 						} else if(range.attack.find(cell => Cell.equals(cell, cursor.cell))) {
 							Unit.move(cached, dest, map)
-							let target = Map.unitAt(map, cursor.cell)
-							view.cache.target = {
-								unit: target,
-								time: 0
+							if (!view.cache.target) {
+								let target = Map.unitAt(map, cursor.cell)
+								view.cache.target = {
+									unit: target,
+									time: 0
+								}
 							}
 						}
 					} else {
