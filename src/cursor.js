@@ -51,41 +51,56 @@ export function update(cursor, keys, game, view) {
 		let unit = cursor.selection.unit
 		let index = map.units.indexOf(unit)
 		let range = view.cache.ranges[index]
-		let [ x, y ] = cursor.cell
 		if (held.left && !prev.left && !held.right) {
-			let [ x, y ] = cursor.cell
-			for (let i = 0; i < range.move.length; i++) {
-				let cell = range.move[i]
-				if (cell[1] === y && cell[0] < x) {
-					x = cell[0]
+			for (var x = cursor.cell[0]; x >= 0; x--) {
+				for (var i = 0; i < range.move.length; i++) {
+					let cell = range.move[i]
+					if (cell[0] === x - 1 && cell[1] === cursor.cell[1]) {
+						break
+					}
+				}
+				if (i === range.move.length) {
+					break
 				}
 			}
 			cursor.cell[0] = x
 		} else if (held.right && !prev.right && !held.left) {
-			let [ x, y ] = cursor.cell
-			for (let i = 0; i < range.move.length; i++) {
-				let cell = range.move[i]
-				if (cell[1] === y && cell[0] > x) {
-					x = cell[0]
+			for (var x = cursor.cell[0]; x < map.layout.size[0]; x++) {
+				for (var i = 0; i < range.move.length; i++) {
+					let cell = range.move[i]
+					if (cell[0] === x + 1 && cell[1] === cursor.cell[1]) {
+						break
+					}
+				}
+				if (i === range.move.length) {
+					break
 				}
 			}
 			cursor.cell[0] = x
 		}
 		if (held.up && !prev.up && !held.down) {
-			let [ x, y ] = cursor.cell
-			for (let i = 0; i < range.move.length; i++) {
-				let cell = range.move[i]
-				if (cell[0] === x && cell[1] < y) {
-					y = cell[1]
+			for (var y = cursor.cell[1]; y >= 0; y--) {
+				for (var i = 0; i < range.move.length; i++) {
+					let cell = range.move[i]
+					if (cell[1] === y - 1 && cell[0] === cursor.cell[0]) {
+						break
+					}
+				}
+				if (i === range.move.length) {
+					break
 				}
 			}
 			cursor.cell[1] = y
 		} else if (held.down && !prev.down && !held.up) {
-			let [ x, y ] = cursor.cell
-			for (let i = 0; i < range.move.length; i++) {
-				let cell = range.move[i]
-				if (cell[0] === x && cell[1] > y) {
-					y = cell[1]
+			for (var y = cursor.cell[1]; y < map.layout.size[1]; y++) {
+				for (var i = 0; i < range.move.length; i++) {
+					let cell = range.move[i]
+					if (cell[1] === y + 1 && cell[0] === cursor.cell[0]) {
+						break
+					}
+				}
+				if (i === range.move.length) {
+					break
 				}
 			}
 			cursor.cell[1] = y

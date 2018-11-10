@@ -13,9 +13,10 @@ const symbols = {
 export default function normalize(spritesheet) {
 	let sprites = disassemble(spritesheet, sourcemap)
 	return {
-		tiles:  sprites.tiles,
-		pieces: pieces(sprites.piece),
-		ui:     ui(sprites.ui),
+		tiles:   sprites.tiles,
+		pieces:  pieces(sprites.piece),
+		ui:      ui(sprites.ui),
+		effects: effects()
 	}
 }
 
@@ -31,6 +32,21 @@ function disassemble(spritesheet, sourcemap) {
 	}
 
 	return sprites
+}
+
+function effects() {
+	let small = Canvas(1, 1)
+	small.fillStyle = "white"
+	small.fillRect(0, 0, 1, 1)
+
+	let large = Canvas(2, 2)
+	large.fillStyle = "white"
+	large.fillRect(0, 0, 2, 2)
+
+	return {
+		small: small.canvas,
+		large: large.canvas
+	}
 }
 
 function pieces(sprites) {
@@ -174,20 +190,38 @@ function ui(sprites) {
 			attack: extract(sprites.squares, 16, 0, 16, 16)
 		},
 		arrows: {
-			left:      extract(sprites.arrows,  0,  0, 16, 16),
-			right:     extract(sprites.arrows, 16,  0, 16, 16),
-			up:        extract(sprites.arrows, 32,  0, 16, 16),
-			down:      extract(sprites.arrows, 48,  0, 16, 16),
-			leftStub:  extract(sprites.arrows,  0, 16, 16, 16),
-			rightStub: extract(sprites.arrows, 16, 16, 16, 16),
-			upStub:    extract(sprites.arrows, 32, 16, 16, 16),
-			downStub:  extract(sprites.arrows, 48, 16, 16, 16),
-			upLeft:    extract(sprites.arrows,  0, 32, 16, 16),
-			upRight:   extract(sprites.arrows, 16, 32, 16, 16),
-			downLeft:  extract(sprites.arrows, 32, 32, 16, 16),
-			downRight: extract(sprites.arrows, 48, 32, 16, 16),
-			horiz:     extract(sprites.arrows,  0, 48, 16, 16),
-			vert:      extract(sprites.arrows, 16, 48, 16, 16),
+			player: {
+				left:      extract(sprites.arrows,  0,  0, 16, 16),
+				right:     extract(sprites.arrows, 16,  0, 16, 16),
+				up:        extract(sprites.arrows, 32,  0, 16, 16),
+				down:      extract(sprites.arrows, 48,  0, 16, 16),
+				leftStub:  extract(sprites.arrows,  0, 16, 16, 16),
+				rightStub: extract(sprites.arrows, 16, 16, 16, 16),
+				upStub:    extract(sprites.arrows, 32, 16, 16, 16),
+				downStub:  extract(sprites.arrows, 48, 16, 16, 16),
+				upLeft:    extract(sprites.arrows,  0, 32, 16, 16),
+				upRight:   extract(sprites.arrows, 16, 32, 16, 16),
+				downLeft:  extract(sprites.arrows, 32, 32, 16, 16),
+				downRight: extract(sprites.arrows, 48, 32, 16, 16),
+				horiz:     extract(sprites.arrows,  0, 48, 16, 16),
+				vert:      extract(sprites.arrows, 16, 48, 16, 16)
+			},
+			enemy: {
+				left:      extract(sprites.arrows,  0,  64, 16, 16),
+				right:     extract(sprites.arrows, 16,  64, 16, 16),
+				up:        extract(sprites.arrows, 32,  64, 16, 16),
+				down:      extract(sprites.arrows, 48,  64, 16, 16),
+				leftStub:  extract(sprites.arrows,  0,  80, 16, 16),
+				rightStub: extract(sprites.arrows, 16,  80, 16, 16),
+				upStub:    extract(sprites.arrows, 32,  80, 16, 16),
+				downStub:  extract(sprites.arrows, 48,  80, 16, 16),
+				upLeft:    extract(sprites.arrows,  0,  96, 16, 16),
+				upRight:   extract(sprites.arrows, 16,  96, 16, 16),
+				downLeft:  extract(sprites.arrows, 32,  96, 16, 16),
+				downRight: extract(sprites.arrows, 48,  96, 16, 16),
+				horiz:     extract(sprites.arrows,  0, 112, 16, 16),
+				vert:      extract(sprites.arrows, 16, 112, 16, 16)
+			}
 		}
 	}
 
@@ -245,13 +279,14 @@ function ui(sprites) {
 		}
 
 		for (let y = 1; y < rows - 1; y++) {
-			for (let x = 1; x < cols - 1; x++) {
-				context.drawImage(ui.box.center, x * 16, y * 16)
-			}
+			// for (let x = 1; x < cols - 1; x++) {
+			// 	context.drawImage(ui.box.center, x * 16, y * 16)
+			// }
 			context.drawImage(ui.box.left,           0, y * 16)
 			context.drawImage(ui.box.right, width - 16, y * 16)
 		}
 
+		context.fillRect(4, 4, canvas.width - 8, canvas.height - 8)
 		context.drawImage(ui.box.topLeft,                     0,                  0)
 		context.drawImage(ui.box.topRight,    canvas.width - 16,                  0)
 		context.drawImage(ui.box.bottomLeft,                  0, canvas.height - 16)
@@ -331,7 +366,7 @@ function ui(sprites) {
 		}
 	}
 
-	function Arrow(path) {
+	function Arrow(path, faction) {
 		let arrow = []
 		for (let i = 0; i < path.length; i++) {
 			let [ x, y ] = path[i]
@@ -408,7 +443,7 @@ function ui(sprites) {
 
 				if (direction) {
 					arrow.push({
-						image: ui.arrows[direction],
+						image: ui.arrows[faction][direction],
 						position: [ x, y ]
 					})
 				}
@@ -446,11 +481,14 @@ function typeface(image) {
 }
 
 function cursor(image) {
-	var frames = image.width / 16
-	var animation = new Array(frames)
-	for (var i = 0; i < frames; i++) {
-		animation[i] = extract(image, i * 16, 0, 16, 16)
+	return {
+		player: [
+			extract(image,  0, 0, 16, 16),
+			extract(image, 16, 0, 16, 16)
+		],
+		enemy: [
+			extract(image,  0, 16, 16, 16),
+			extract(image, 16, 16, 16, 16)
+		]
 	}
-
-	return animation
 }

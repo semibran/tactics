@@ -13,30 +13,32 @@ function update(anim) {
 	let time = data.time
 	let text = data.text
 	let bg = data.bg
-	if (time > 10 && time <= 30) {
+	if (time > 10 && time <= 25) {
 		data.state = "enter"
-		let progress = (time - 10) / 20
+		let progress = (time - 10) / 15
 		let radians = Math.sin(Math.PI / 2 * progress)
 		text.x = radians
-	} else if (time > 30 && time <= 45) {
+	} else if (time > 25 && time <= 40) {
 		data.state = "pass"
-		text.x = (time - 30) / 15
-	} else if (time > 45 && time <= 65) {
+		text.x = (time - 25) / 15
+	} else if (time > 40 && time <= 55) {
 		data.state = "exit"
-		let progress = (time - 45) / 20
+		let progress = (time - 40) / 15
 		let radians = 1 - Math.sin(Math.PI / 2 + Math.PI / 2 * progress)
 		text.x = radians
 	}
 
-	if (time <= 45) {
+	if (time <= 40) {
 		if (bg.width < 1) {
 			bg.width += 1 / 16
 		} else if (bg.height < 1) {
-			bg.height += 1 / 10
+			let progress = (time - 16) / 8
+			let radians = Math.sin(Math.PI / 2 * progress)
+			bg.height = radians
 		}
 	} else {
 		if (bg.height > 0) {
-			bg.height -= 1 / 10
+			bg.height -= 1 / 8
 		} else if (bg.x < 1) {
 			bg.x += 1 / 16
 		}

@@ -59,6 +59,7 @@ export function create(width, height, sprites) {
 			units: null,
 			ranges: [],
 			squares: [],
+			particles: [],
 			menu: {
 				box: null,
 				labels: []
@@ -118,7 +119,7 @@ export function render(view, game) {
 		"arrows",
 		"cursor",
 		"selection",
-		"damage",
+		"effects",
 		"ui"
 	]
 
@@ -400,7 +401,7 @@ export function render(view, game) {
 		}
 
 		if (path && (cursor.selection && !cache.moved || moving && time % 2)) {
-			let arrow = sprites.ui.Arrow(path)
+			let arrow = sprites.ui.Arrow(path, cache.phase.faction)
 			layers.arrows.push(...arrow.map(sprite => ({
 				image: sprite.image,
 				position: [ sprite.position[0] * 16, sprite.position[1] * 16 ]
@@ -616,7 +617,7 @@ export function render(view, game) {
 		} else if (anim && anim.type === "attack" && anim.data.connected) {
 			cache.attack.connected = true
 		}
-		if (cache.attack.connected) {
+		if (cache.attack && cache.attack.connected) {
 			let time = cache.attack.time
 			if (time >= 45 || !target.hp && time >= 30) {
 				if (!target.hp && map.units.includes(target)) {
@@ -632,7 +633,36 @@ export function render(view, game) {
 					}
 				}
 			} else {
+				// particles
+				if (time === 1) {
+					let disp = [ target.cell[0] - attacker.cell[0], target.cell[1] - attacker.cell[1] ]
+					let dist = Math.sqrt(disp[0] * disp[0] + disp[1] * disp[1])
+					let norm = [ disp[0] / dist, disp[1] / dist ]
+					let radians = Math.atan2(disp[1], disp[0])
+					let origin = [ target.cell[0] * 16 + 8 - norm[0] * 4, target.cell[1] * 16 + 8 - norm[1] * 4 ]
+					let total = damage / 3 * 48
+					for (let i = 0; i < total; i++) {
+						let size = "small"
+						if (Math.random() < 0.25) {
+							size = "large"
+						}
+						let sprite = sprites.effects[size]
+						let normal = radians + Math.random() * 1 - 0.5
+						let velocity = [
+							-Math.cos(normal) * Math.random() * 2,
+							-Math.sin(normal) * Math.random() * 2
+						]
+						cache.particles.push({
+							position: origin.slice(),
+							velocity: velocity,
+							image: sprite,
+							time: 0
+						})
+					}
+				}
+
 				if (time < 45) {
+					// visually decrease health
 					let canvas = cache.dialogs.target.hp.image
 					let context = canvas.getContext("2d")
 					let width = 0
@@ -647,13 +677,19 @@ export function render(view, game) {
 					}
 					width = Math.ceil(damage * 14 * progress)
 					context.fillRect(31 + (target.hp + damage) * 14 - width, 11, width, 2)
+
+					// battle result
 					let value = cache.attack.value
 					if (!value) {
-						let text = power.toString()
-						if (power === 0) {
+						let text = null
+						if (power === null) {
 							text = "MISS"
+						} else if (power === 0) {
+							text = "0"
 						} else if (power === 3) {
 							text = "3!!"
+						} else {
+							text = power.toString()
 						}
 						value = cache.attack.value = {
 							offset: 0,
@@ -668,7 +704,7 @@ export function render(view, game) {
 							value.velocity *= -1 / 3
 						}
 					}
-					layers.damage.push({
+					layers.effects.push({
 						image: value.image,
 						position: [
 							target.cell[0] * 16 + 8 - value.image.width / 2,
@@ -677,6 +713,24 @@ export function render(view, game) {
 					})
 				}
 			}
+		}
+	}
+
+	let particles = cache.particles
+	for (let i = 0; i < particles.length; i++) {
+		let particle = particles[i]
+		particle.time++
+		particle.position[0] += particle.velocity[0]
+		particle.position[1] += particle.velocity[1]
+		particle.velocity[0] *= 0.875
+		particle.velocity[1] *= 0.875
+		let percent = Math.random()
+		layers.effects.push(particle)
+		/*
+		if (percent >= particle.time / 60) {
+		}*/
+		if (percent < particle.time / 240) {
+			particles.splice(i--, 1)
 		}
 	}
 
@@ -867,7 +921,7 @@ export function render(view, game) {
 		if (targetDialog) {
 			let damage = Math.min(target.hp,
 				steps <= unit.equipment.weapon.rng
-					? Unit.dmg(unit, target)
+					? Number(Unit.dmg(unit, target))
 					: 0
 			)
 			if (damage) {
@@ -892,7 +946,7 @@ export function render(view, game) {
 			if (unitDialog) {
 				let damage = Math.min(unit.hp,
 					steps <= target.equipment.weapon.rng
-						? Unit.dmg(target, unit)
+						? Number(Unit.dmg(target, unit))
 						: 0
 				)
 				if (damage) {
@@ -913,7 +967,7 @@ export function render(view, game) {
 		if (menu.done) {
 			unit.cell = cached.cell
 			let power = Unit.dmg(unit, target)
-			let damage = Math.min(target.hp, power)
+			let damage = Math.min(target.hp, Number(power))
 			Unit.attack(unit, target)
 			attacks.push({
 				attacker: unit,
@@ -924,7 +978,7 @@ export function render(view, game) {
 			})
 			if (!finisher && steps <= target.equipment.weapon.rng) {
 				let power = Unit.dmg(target, unit)
-				let damage = Math.min(unit.hp, power)
+				let damage = Math.min(unit.hp, Number(power))
 				Unit.attack(target, unit)
 				attacks.push({
 					attacker: target,
@@ -1079,7 +1133,7 @@ export function render(view, game) {
 		renderLayers(layers, order, viewport, context)
 	}
 
-	if (!anims.length || !cache.phase.pending) {
+	if (!anims.length && !attack || !cache.phase.pending) {
 		if (cache.phase.faction !== game.phase.faction) {
 			cursor.cell = game.phase.pending[0].cell.slice()
 			anims.push(Anim("phase", game.phase.faction, Anims.phase()))
@@ -1246,7 +1300,7 @@ function renderCursor(layers, sprites, cursor, view) {
 
 	let x = cursor.prev[0] * 16
 	let y = cursor.prev[1] * 16
-	let sprite = sprites[frame]
+	let sprite = sprites[view.cache.phase.faction][frame]
 	layers.cursor.push({
 		image: sprite,
 		position: [ x, y ]

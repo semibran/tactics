@@ -61,7 +61,9 @@ function main(spritesheet) {
 				} else {
 					if (cursor.selection) {
 						Cursor.deselect(cursor)
-					} else if (!anim || anim.type !== "phase") {
+					} else if (!view.state.attacks.length
+					&& !(anim && anim.type === "phase")
+					) {
 						view.state.paused = true
 					}
 				}
