@@ -10,6 +10,8 @@ import Anim from "./anim"
 
 const blue = "rgb(80, 120, 248)"
 const red = "rgb(208, 0, 88)"
+const cyan = "rgb(144, 224, 232)"
+const pink = "rgb(248, 192, 224)"
 const symbols = {
 	warrior: "axe",
 	knight: "shield",
@@ -43,6 +45,7 @@ export function create(width, height, sprites) {
 			},
 			menu: null,
 			paused: false,
+			attacks: [],
 			dialogs: []
 		},
 		cache: {
@@ -84,7 +87,7 @@ export function update(view) {
 		cache.target.time++
 	}
 
-	if (cache.attack) {
+	if (cache.attack && cache.attack.connected) {
 		cache.attack.time++
 	}
 
@@ -100,10 +103,11 @@ export function update(view) {
 
 export function render(view, game) {
 	let { context, sprites, cache } = view
-	let { time, cursor, viewport, anims, dialogs } = view.state
+	let { time, cursor, viewport, anims, attacks, dialogs } = view.state
 	let { map } = game
 	let canvas = context.canvas
 	let anim = anims[0]
+	let attack = attacks[0]
 	let dialog = dialogs[0]
 	let order = [
 		"floors",
@@ -157,10 +161,8 @@ export function render(view, game) {
 	let phasing = anim && anim.type === "phase"
 	let focus = null
 	if (!phasing || !viewport.target) {
-		if (anim && anim.type === "fade") {
-			focus = anim.target.cell
-		} else if (cache.attack) {
-			focus = cache.attack.target.cell
+		if (attack) {
+			focus = attack.target.cell
 		} else if (forecast && !cache.moved) {
 			let target = dialog.options[dialog.index]
 			focus = target.cell
@@ -176,7 +178,7 @@ export function render(view, game) {
 	}
 
 	if (focus) {
-		let priority = forecast || cache.attack || anim && anim.type === "fade"
+		let priority = forecast || attack
 		let width = Map.width(map) * 16
 		if (width > viewport.size[0] || priority) {
 			viewport.target[0] = focus[0] * 16 + 8 - viewport.size[0] / 2
@@ -219,20 +221,22 @@ export function render(view, game) {
 		viewport.position[1] += (viewport.target[1] - viewport.position[1]) / 16
 	}
 
-	if (anim && anim.type === "attack") {
-		if (anim.data.time === 7) {
-			viewport.shake = 30
-		}
+	if (cache.attack && cache.attack.connected && cache.attack.time === 1) {
+		viewport.shake = 30
 	}
 
 	if (viewport.shake) {
 		viewport.shake--
 		let period = 5
-		let amplitude = cache.attack.power
+		let amplitude = attack.power
 		let duration = 30
 		let progress = 1 - (viewport.shake % period) / period
-		viewport.offset[1] = Math.sin(progress * 2 * Math.PI) * amplitude * viewport.shake / duration
+		let axis = attack.attacker.cell[1] - attack.target.cell[1]
+			? 1
+			: 0
+		viewport.offset[axis] = Math.sin(progress * 2 * Math.PI) * amplitude * viewport.shake / duration
 	} else {
+		viewport.offset[0] = 0
 		viewport.offset[1] = 0
 	}
 
@@ -459,12 +463,14 @@ export function render(view, game) {
 	let below = relative >= viewport.size[1] / 2
 
 	// primary dialog, for hovered units and selections
-	let selected = cursor.selection || (cache.attack && cache.attack.attacker) || (anim && anim.type === "fade" && cache.selected) || cursor.under
+	let selected = cursor.selection
+		|| (attack && cache.selected)
+		|| cursor.under
 	let selectionDialog = cache.dialogs.selection
 	if (selected && !(cache.selected && selected !== cache.selected)
 	&& !phasing && !pause
 	&& !(forecast && selectionDialog && selectionDialog.name.position[1] === 8)
-	&& (!selectionDialog || forecast || cache.attack || anim && anim.type === "fade" || (
+	&& (!selectionDialog || forecast || attack || (
 		!(below && !forecast && selectionDialog && selectionDialog.name.position[1] !== 8)
 		&& !(!below && selectionDialog && selectionDialog.name.position[1] === 8)
 		))
@@ -532,7 +538,7 @@ export function render(view, game) {
 			target = cache.target
 		}
 		cursor.cell = target.unit.cell.slice()
-	} else if (cache.attack || anim && anim.type === "fade") {
+	} else if (attack) {
 		target = cache.target
 	} else if (cursor.selection && cursor.under && cursor.selection !== cursor.under && !Unit.allied(cursor.selection.unit, cursor.under.unit)) {
 		target = cursor.under
@@ -595,64 +601,82 @@ export function render(view, game) {
 
 	// attack animation
 	// TODO: modularize
-	if (cache.attack) {
-		let attacker = cache.attack.attacker.unit
-		let target = cache.attack.target.unit
-		let damage = cache.attack.damage
-		let power = cache.attack.power
-		let time = cache.attack.time
-		if (time >= cache.attack.duration) {
-			cache.attack = null
-			if (!target.hp) {
-				let index = map.units.indexOf(target)
-				map.units.splice(index, 1)
+	if (attack) {
+		let { attacker, target, power, damage } = attack
+		if (!cache.attack && !anim) {
+			let index = map.units.indexOf(attacker)
+			let cached = cache.units[index]
+			anims.push(
+				Anim("attack", cached, Anims.attack(attacker.cell, target.cell))
+			)
+			cache.attack = {
+				time: 0,
+				connected: false
 			}
-			Game.endTurn(game, attacker)
-			cursor.cell = attacker.cell.slice()
-			cursor.prev = cursor.cell.slice()
-		} else if (time >= 7) {
-			let canvas = cache.dialogs.target.hp.image
-			let context = canvas.getContext("2d")
-			let width = 0
-			let progress = 0
-			let duration = 15
-			if (time <= 7 + duration) {
-				progress = (time - 7) / duration
-				context.fillStyle = red
-			} else if (time >= 7 + duration * 2 && time <= 7 + duration * 3) {
-				progress = (cache.attack.time - 7 - duration * 2) / duration
-				context.fillStyle = "black"
-			}
-			width = Math.ceil(damage * 14 * progress)
-			context.fillRect(31 + (target.hp + damage) * 14 - width, 11, width, 2)
-			let value = cache.attack.value
-			if (!value) {
-				let text = power.toString()
-				if (power === 0) {
-					text = "Miss!"
-				} else if (power === 3) {
-					text = "3!!"
-				}
-				value = cache.attack.value = {
-					offset: 0,
-					velocity: -2,
-					image: sprites.ui.Text(text)
+		} else if (anim && anim.type === "attack" && anim.data.connected) {
+			cache.attack.connected = true
+		}
+		if (cache.attack.connected) {
+			let time = cache.attack.time
+			if (time >= 45 || !target.hp && time >= 30) {
+				if (!target.hp && map.units.includes(target)) {
+					let index = map.units.indexOf(target)
+					map.units.splice(index, 1)
+				} else if (!anims.length) {
+					attacks.shift()
+					cache.attack = null
+					if (!attack.counter) {
+						Game.endTurn(game, attacker)
+						cursor.cell = attacker.cell.slice()
+						cursor.prev = cursor.cell.slice()
+					}
 				}
 			} else {
-				value.offset += value.velocity
-				value.velocity += 0.25
-				if (value.offset > 0) {
-					value.offset = 0
-					value.velocity *= -1 / 3
+				if (time < 45) {
+					let canvas = cache.dialogs.target.hp.image
+					let context = canvas.getContext("2d")
+					let width = 0
+					let progress = 0
+					let period = 15
+					if (time <= period) {
+						progress = time / period
+						context.fillStyle = red
+					} else if (time >= period * 2 && time <= period * 3) {
+						progress = (time - period * 2) / period
+						context.fillStyle = "black"
+					}
+					width = Math.ceil(damage * 14 * progress)
+					context.fillRect(31 + (target.hp + damage) * 14 - width, 11, width, 2)
+					let value = cache.attack.value
+					if (!value) {
+						let text = power.toString()
+						if (power === 0) {
+							text = "MISS"
+						} else if (power === 3) {
+							text = "3!!"
+						}
+						value = cache.attack.value = {
+							offset: 0,
+							velocity: -2,
+							image: sprites.ui.Text(text)
+						}
+					} else {
+						value.offset += value.velocity
+						value.velocity += 0.25
+						if (value.offset > 0) {
+							value.offset = 0
+							value.velocity *= -1 / 3
+						}
+					}
+					layers.damage.push({
+						image: value.image,
+						position: [
+							target.cell[0] * 16 + 8 - value.image.width / 2,
+							target.cell[1] * 16 - 12 + value.offset
+						]
+					})
 				}
 			}
-			layers.damage.push({
-				image: value.image,
-				position: [
-					target.cell[0] * 16 + 8 - value.image.width / 2,
-					target.cell[1] * 16 - 12 + value.offset
-				]
-			})
 		}
 	}
 
@@ -887,19 +911,29 @@ export function render(view, game) {
 		}
 
 		if (menu.done) {
+			unit.cell = cached.cell
 			let power = Unit.dmg(unit, target)
 			let damage = Math.min(target.hp, power)
-			cache.attack = {
-				attacker: cache.selected,
-				target: cache.target,
+			Unit.attack(unit, target)
+			attacks.push({
+				attacker: unit,
+				target: target,
 				power: power,
 				damage: damage,
-				value: null,
-				time: 0,
-				duration: 60
+				counter: false
+			})
+			if (!finisher && steps <= target.equipment.weapon.rng) {
+				let power = Unit.dmg(target, unit)
+				let damage = Math.min(unit.hp, power)
+				Unit.attack(target, unit)
+				attacks.push({
+					attacker: target,
+					target: unit,
+					power: power,
+					damage: damage,
+					counter: true
+				})
 			}
-			unit.cell = cached.cell
-			Unit.attack(unit, target)
 			cache.squares.length = 0
 			cache.ranges.length = 0
 			cache.moved = false
@@ -907,9 +941,6 @@ export function render(view, game) {
 			cache.selection = null
 			dialogs.length = 0
 			anim.done = true
-			anims.push(
-				Anim("attack", cached, Anims.attack(unit.cell, target.cell))
-			)
 		}
 	} else {
 		let dialog = cache.dialogs.forecast
@@ -1036,7 +1067,8 @@ export function render(view, game) {
 		context.fillStyle = "white"
 		context.fillRect(0, 0, context.canvas.width, context.canvas.height)
 	} else {
-		if (!cache.attack
+		if (!attack
+		&& !pause
 		&& !phasing
 		&& (!actions && !cache.moved || forecast)
 		) {
@@ -1124,6 +1156,7 @@ function renderUnits(layers, sprites, game, view) {
 	let map = game.map
 	let phase = game.phase
 	let cache = view.cache
+	let attacks = view.state.attacks
 	let anims = view.state.anims
 	let anim = anims[0]
 	for (let i = 0; i < cache.units.length; i++) {
@@ -1137,6 +1170,7 @@ function renderUnits(layers, sprites, game, view) {
 		if (cache.phase.pending
 		&& !cache.phase.pending.includes(real)
 		&& cache.phase.faction === unit.faction
+		&& !(attacks.length && attacks[0].target === real)
 		&& !(anim && anim.target === unit && (anim.type === "move" || anim.type === "attack"))
 		) {
 			sprite = sprites.done[unit.faction][symbols[unit.type]]
@@ -1171,11 +1205,13 @@ function renderUnits(layers, sprites, game, view) {
 				position: [ x, y - z ]
 			})
 		} else {
-			if (view.cache.attack) {
-				let attack = view.cache.attack
-				if (attack.target.unit === real
+			if (cache.attack) {
+				let attack = attacks[0]
+				if (attack.target === real
 				&& attack.damage
-				&& attack.time >= 7/* && attack.time < 7 + 45*/ && attack.time % 2
+				&& cache.attack.connected
+				&& cache.attack.time < 30
+				&& cache.attack.time % 2
 				) {
 					sprite = sprites.flashing
 				}

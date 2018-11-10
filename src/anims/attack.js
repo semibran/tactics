@@ -6,7 +6,8 @@ function attack(src, dest) {
 		src: src,
 		norm: norm,
 		cell: src.slice(),
-		time: 0
+		time: 0,
+		connected: false
 	}
 }
 
@@ -16,6 +17,10 @@ function update(anim) {
 	let steps = data.time <= 7
 		? data.time
 		: 7 - (data.time - 7)
+
+	if (data.time >= 8) {
+		data.connected = true
+	}
 
 	data.cell[0] = data.src[0] + data.norm[0] / 8 * steps
 	data.cell[1] = data.src[1] + data.norm[1] / 8 * steps

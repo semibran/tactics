@@ -32,10 +32,9 @@ function main(spritesheet) {
 		let dialog = dialogs[0]
 		if (dialog) {
 			Menu.update(dialog.menu, keys)
-		} else if (!view.cache.attack
+		} else if (!view.state.attacks.length
 		&& !view.cache.moved
 		&& !(anims.length && anims[0].type === "phase")
-		&& !(anims.length && anims[0].type === "fade")
 		) {
 			Cursor.update(cursor, keys, game, view)
 		}
@@ -71,6 +70,7 @@ function main(spritesheet) {
 
 		Keys.update(keys)
 		requestAnimationFrame(loop)
+		// setTimeout(loop, 1000 / 30)
 	}
 }
 
