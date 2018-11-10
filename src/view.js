@@ -437,7 +437,10 @@ export function render(view, game) {
 	let selectionDialog = cache.dialogs.selection
 	if (selected && !(cache.selected && selected !== cache.selected)
 	&& !(forecast && selectionDialog && selectionDialog.name.position[1] === 8)
-	&& (!selectionDialog || forecast || cache.attack || !(below && selectionDialog && selectionDialog.name.position[1] !== 8))
+	&& (!selectionDialog || forecast || cache.attack || (
+		!(below && selectionDialog && selectionDialog.name.position[1] !== 8)
+		&& !(!below && selectionDialog && selectionDialog.name.position[1] === 8)
+		))
 	) {
 		if (!cache.selected) {
 			cache.selected = selected
@@ -510,6 +513,7 @@ export function render(view, game) {
 
 	if (target && !(cache.target && target !== cache.target)
 	&& !actions
+	&& !(forecast && targetDialog && targetDialog.name.position[1] === 8)
 	&& !(forecast && targetDialog && targetDialog.name.position[1] === 8)
 	) {
 		if (!cache.target) {
@@ -644,6 +648,8 @@ export function render(view, game) {
 					Anim("drop", anim.target, Anims.drop(anim.data.height))
 				)
 				Game.endTurn(game, unit)
+				cursor.cell = unit.cell.slice()
+				cursor.prev = unit.cell.slice()
 				dialogs.shift()
 			} else if (selection === "attack") {
 				dialogs.unshift({
@@ -906,7 +912,8 @@ export function render(view, game) {
 
 	if (map.units.length !== objective.lastUpdate) {
 		let enemies = map.units.filter(unit => unit.faction === "enemy")
-		objective.body.image = sprites.ui.TextBox(`Defeat (${enemies.length}) enemies`)
+		let n = enemies.length
+		objective.body.image = sprites.ui.TextBox(`Defeat (${n}) enem${n === 1 ? "y" : "ies"}`)
 		objective.lastUpdate = enemies.length
 	}
 
@@ -914,6 +921,7 @@ export function render(view, game) {
 	if (!cursor.selection
 	&& !cursor.under
 	&& !cache.attack
+	&& Cell.manhattan(cursor.cell, cursor.prev) < 1e-3
 	&& (below === (title.position[1] === 8)
 		|| title.position[0] === viewport.size[0]
 		&& body.position[0] === viewport.size[0]
