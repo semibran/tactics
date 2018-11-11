@@ -267,6 +267,7 @@ export function render(view, game) {
 		&& cache.log.col === log[log.length - 1].length - 1
 	let visible = (!updated || !cache.log.interrupt && cache.log.time < 300)
 		&& (attack || !cache.log.interrupt && !Cell.manhattan(cursor.cell, cursor.prev) > 1e-3)
+		&& !pause
 	if (visible) {
 		// log is not up to date, or up to date and log presence has not exceeded time delay
 		let { box, surface } = cache.log
