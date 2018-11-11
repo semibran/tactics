@@ -1324,7 +1324,7 @@ export function render(view, game) {
 		})
 	}
 
-	if (cache.attack && cache.attack.power === 3 && cache.attack.time === 1) {
+	if (cache.attack && attack.power === 3 && cache.attack.time === 1) {
 		context.fillStyle = "white"
 		context.fillRect(0, 0, context.canvas.width, context.canvas.height)
 	} else {
