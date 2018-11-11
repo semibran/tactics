@@ -726,12 +726,12 @@ export function render(view, game) {
 		if (!cache.attack && !anim) {
 			let index = map.units.indexOf(attacker)
 			let cached = cache.units[index]
-			anims.push(
-				Anim("attack", cached, Anims.attack(attacker.cell, target.cell))
-			)
+			let anim = Anim("attack", cached, Anims.attack(attacker.cell, target.cell))
+			anims.push(anim)
 			cache.attack = {
 				time: 0,
-				connected: false
+				connected: false,
+				normal: anim.data.norm
 			}
 			if (!attack.counter) {
 				log.push(`${attacker.name} attacks`)
@@ -1204,7 +1204,7 @@ export function render(view, game) {
 		objective.time = 0
 	}
 
-	let idle = 90
+	let idle = 150
 	if (objective.time) {
 		if (title.position[0] === viewport.size[0]) {
 			if (below) {
@@ -1415,13 +1415,23 @@ function renderUnits(layers, sprites, game, view) {
 		} else {
 			if (cache.attack) {
 				let attack = attacks[0]
-				if (attack.target === real
-				&& attack.damage
-				&& cache.attack.connected
-				&& cache.attack.time < 45
-				&& cache.attack.time % 2
-				) {
-					sprite = sprites.flashing
+				if (attack.target === real) {
+					let { connected, time, normal } = cache.attack
+					if (connected) {
+						if (attack.damage && time < 45 && time % 2) {
+							sprite = sprites.flashing
+						}
+						if (attack.power
+						&& unit.type !== "knight"
+						&& time < 20) {
+							let steps = time
+							if (time > 10) {
+								steps = 20 - time
+							}
+							x += normal[0] * steps / 2 * attack.power / 2
+							y += normal[1] * steps / 2 * attack.power / 2
+						}
+					}
 				}
 			}
 			layers.pieces.push({

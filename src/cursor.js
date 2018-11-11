@@ -193,7 +193,7 @@ export function cycle(cursor, game, reverse) {
 		? phase.pending
 		: allies
 	let index = units.indexOf(unit)
-	if (index === -1 && units === phase.pending) {
+	if (units === phase.pending && index === -1) {
 		index = allies.indexOf(unit)
 		units = allies
 	}
