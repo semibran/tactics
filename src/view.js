@@ -1418,7 +1418,7 @@ function renderUnits(layers, sprites, game, view) {
 				if (attack.target === real
 				&& attack.damage
 				&& cache.attack.connected
-				&& cache.attack.time < 30
+				&& cache.attack.time < 45
 				&& cache.attack.time % 2
 				) {
 					sprite = sprites.flashing
