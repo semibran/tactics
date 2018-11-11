@@ -46,7 +46,8 @@ export function create(width, height, sprites) {
 			menu: null,
 			paused: false,
 			attacks: [],
-			dialogs: []
+			dialogs: [],
+			log: []
 		},
 		cache: {
 			map: null,
@@ -60,6 +61,7 @@ export function create(width, height, sprites) {
 			ranges: [],
 			squares: [],
 			particles: [],
+			log: null,
 			menu: {
 				box: null,
 				labels: []
@@ -104,7 +106,7 @@ export function update(view) {
 
 export function render(view, game) {
 	let { context, sprites, cache } = view
-	let { time, cursor, viewport, anims, attacks, dialogs } = view.state
+	let { time, cursor, viewport, anims, attacks, dialogs, log } = view.state
 	let { map } = game
 	let canvas = context.canvas
 	let anim = anims[0]
@@ -240,6 +242,91 @@ export function render(view, game) {
 		viewport.offset[0] = 0
 		viewport.offset[1] = 0
 	}
+
+	if (!cache.log) {
+		let box = sprites.ui.Box(viewport.size[0] - 16, 36)
+		let element = {
+			image: box,
+			position: [ 8, viewport.size[1] ]
+		}
+		cache.log = {
+			row: 0,
+			col: 0,
+			focus: 0,
+			time: 0,
+			interrupt: true,
+			bookmark: 0,
+			box: element,
+			texts: [],
+			surface: Canvas(box.width - 16, box.height - 16),
+		}
+	}
+
+	let updated = !log.length
+		|| cache.log.row === log.length - 1
+		&& cache.log.col === log[log.length - 1].length - 1
+	let visible = (!updated || !cache.log.interrupt && cache.log.time < 300)
+		&& (attack || !cache.log.interrupt && !Cell.manhattan(cursor.cell, cursor.prev) > 1e-3)
+	if (visible) {
+		// log is not up to date, or up to date and log presence has not exceeded time delay
+		let { box, surface } = cache.log
+		if (cache.log.interrupt) {
+			cache.log.interrupt = false
+			cache.log.time = 0
+			box.image
+				.getContext("2d")
+				.fillRect(8, 8, box.image.width - 16, box.image.height - 16)
+		}
+
+		let target = viewport.size[1] - box.image.height - 8
+		box.position[1] += (target - box.position[1]) / 8
+		if (Math.abs(target - box.position[1]) < 4) {
+			if (cache.log.focus < cache.log.row && cache.log.row >= 2 && cache.log.row < log.length) {
+				cache.log.focus += (cache.log.row - cache.log.focus) / 8
+			}
+
+			let content = log[cache.log.row].slice(0, cache.log.col + 1)
+			let text = sprites.ui.Text(content)
+			cache.log.texts[cache.log.row] = text
+			surface.canvas.height = Math.max(0, (log.length - cache.log.bookmark) * 12 - 4)
+
+			let visible = cache.log.row - cache.log.bookmark
+			for (let i = cache.log.bookmark; i <= cache.log.row; i++) {
+				let text = cache.log.texts[i]
+				surface.drawImage(text, 0, (i - cache.log.bookmark) * 12)
+			}
+
+			let temp = Canvas(box.image.width - 16, box.image.height - 16)
+			let offset = Math.max(0, (cache.log.focus - cache.log.bookmark - 1) * 12)
+			temp.drawImage(cache.log.surface.canvas, 0, -Math.ceil(offset))
+
+			let context = box.image.getContext("2d")
+			context.fillRect(8, 8, box.image.width - 16, box.image.height - 16)
+			context.drawImage(temp.canvas, 8, 8)
+
+			if (cache.log.col !== log[cache.log.row].length - 1) {
+				cache.log.col++
+			} else if (cache.log.row !== log.length - 1) {
+				cache.log.row++
+				cache.log.col = 0
+			} else {
+				cache.log.time++
+			}
+		}
+		layers.ui.push(box)
+	} else {
+		if (!cache.log.interrupt) {
+			cache.log.interrupt = true
+			cache.log.bookmark = cache.log.row + 1
+		}
+		let box = cache.log.box
+		let target = viewport.size[1] + box.image.height
+		if (box.position[1] < target) {
+			box.position[1] += Math.min(8, target - box.position[1])
+			layers.ui.push(box)
+		}
+	}
+
 
 	let selection = cursor.selection || cache.selection
 	if (selection) {
@@ -499,16 +586,32 @@ export function render(view, game) {
 			}
 		}
 
-		let details = cache.dialogs.selection
+		let { name, hp } = cache.dialogs.selection
+		let y1 = 0
+		let y2 = 0
+		if (attack || visible) {
+			y2 = viewport.size[1] - 4 - 36 - 4 - hp.image.height - 4
+			y1 = y2 - 4 - name.image.height
+		} else if (!below || forecast) {
+			y2 = viewport.size[1] - 4 - hp.image.height - 4
+			y1 = y2 - 4 - name.image.height
+		}
+
+		if (attack || !below || forecast) {
+			name.position[1] += (y1 - name.position[1]) / 8
+			hp.position[1]   += (y2 - hp.position[1]) / 8
+		}
+
 		if (selected) {
 			if (selected.time >= 12) {
-				details.name.position[0] += (8 - details.name.position[0]) / 8
+				name.position[0] += (8 - name.position[0]) / 8
 			}
 			if (selected.time >= 16) {
-				details.hp.position[0] += (8 - details.hp.position[0]) / 8
+				hp.position[0] += (8 - hp.position[0]) / 8
 			}
 		}
-		layers.ui.push(details.name, details.hp)
+
+		layers.ui.push(name, hp)
 	} else if (cache.selected) {
 		let unit = cache.selected.unit
 		let details = cache.dialogs.selection
@@ -548,7 +651,6 @@ export function render(view, game) {
 	if (target && !(cache.target && target !== cache.target)
 	&& !actions
 	&& !(forecast && targetDialog && targetDialog.name.position[1] === 8)
-	&& !(forecast && targetDialog && targetDialog.name.position[1] === 8)
 	) {
 		if (!cache.target) {
 			cache.target = target
@@ -572,18 +674,35 @@ export function render(view, game) {
 				}
 			}
 		}
-		let details = cache.dialogs.target
+
+		let { name, hp } = cache.dialogs.target
+		let y1 = 0
+		let y2 = 0
+		if (attack || visible) {
+			y2 = viewport.size[1] - 8 - 36 - 4 - hp.image.height
+			y1 = y2 - 4 - name.image.height
+		} else if (!below || forecast) {
+			y2 = viewport.size[1] - 8 - hp.image.height
+			y1 = y2 - 4 - name.image.height
+		}
+
+		if (attack || !below || forecast) {
+			name.position[1] += (y1 - name.position[1]) / 8
+			hp.position[1]   += (y2 - hp.position[1]) / 8
+		}
+
 		if (target) {
 			if (target.time >= 12) {
-				let box = details.name
-				box.position[0] += (viewport.size[0] - box.image.width - 8 - box.position[0]) / 8
+				let x = viewport.size[0] - 8 - name.image.width
+				name.position[0] += (x  - name.position[0]) / 8
 			}
 			if (target.time >= 16) {
-				let box = details.hp
-				box.position[0] += (viewport.size[0] - box.image.width - 8 - box.position[0]) / 8
+				let x = viewport.size[0] - 8 - hp.image.width
+				hp.position[0] += (x - hp.position[0]) / 8
 			}
 		}
-		layers.ui.push(details.name, details.hp)
+
+		layers.ui.push(name, hp)
 	} else if (cache.target) {
 		let unit = cache.target.unit
 		let details = cache.dialogs.target
@@ -601,7 +720,6 @@ export function render(view, game) {
 	}
 
 	// attack animation
-	// TODO: modularize
 	if (attack) {
 		let { attacker, target, power, damage } = attack
 		if (!cache.attack && !anim) {
@@ -614,23 +732,48 @@ export function render(view, game) {
 				time: 0,
 				connected: false
 			}
+			if (!attack.counter) {
+				log.push(`${attacker.name} attacks`)
+			} else {
+				log.push(`${attacker.name} counters -`)
+			}
 		} else if (anim && anim.type === "attack" && anim.data.connected) {
-			cache.attack.connected = true
+			if (!cache.attack.connected) {
+				cache.attack.connected = true
+				if (power === null) {
+					let p = target.faction === "player"
+						? "."
+						: "!"
+					log.push(`${target.name} dodges the blow${p}`)
+				} else if (power === 0) {
+					let p = target.faction === "player"
+						? "."
+						: "!"
+					log.push(`${target.name} blocks the attack${p}`)
+				} else {
+					let p = damage === 3
+						? "!!"
+						: "."
+					log.push(`${target.name} suffers ${damage} damage${p}`)
+				}
+			}
 		}
 		if (cache.attack && cache.attack.connected) {
 			let time = cache.attack.time
-			if (time >= 45 || !target.hp && time >= 30) {
-				if (!target.hp && map.units.includes(target)) {
-					let index = map.units.indexOf(target)
-					map.units.splice(index, 1)
-				} else if (!anims.length) {
-					attacks.shift()
-					cache.attack = null
-					if (!attack.counter) {
-						Game.endTurn(game, attacker)
-						cursor.cell = attacker.cell.slice()
-						cursor.prev = cursor.cell.slice()
-					}
+			if (time >= 45 && !target.hp && map.units.includes(target)) {
+				// remove dead unit from map
+				let index = map.units.indexOf(target)
+				map.units.splice(index, 1)
+				log.push(`${target.name} is defeated.`)
+			}
+
+			if (time >= 60 && target.hp || time >= 90) {
+				attacks.shift()
+				cache.attack = null
+				if (!attack.counter) {
+					Game.endTurn(game, attacker)
+					cursor.cell = attacker.cell.slice()
+					cursor.prev = cursor.cell.slice()
 				}
 			} else {
 				// particles
@@ -661,23 +804,26 @@ export function render(view, game) {
 					}
 				}
 
-				if (time < 45) {
-					// visually decrease health
-					let canvas = cache.dialogs.target.hp.image
-					let context = canvas.getContext("2d")
-					let width = 0
-					let progress = 0
-					let period = 15
-					if (time <= period) {
-						progress = time / period
-						context.fillStyle = red
-					} else if (time >= period * 2 && time <= period * 3) {
-						progress = (time - period * 2) / period
-						context.fillStyle = "black"
-					}
-					width = Math.ceil(damage * 14 * progress)
-					context.fillRect(31 + (target.hp + damage) * 14 - width, 11, width, 2)
+				// visually decrease health
+				let details = attack.counter
+					? cache.dialogs.selection
+					: cache.dialogs.target
+				let canvas = details.hp.image
+				let context = canvas.getContext("2d")
+				let width = 0
+				if (time * 2 <= damage * 14) {
+					width = Math.min(damage * 14, time * 2)
+					context.fillStyle = red
+				} else {
+					width = time - damage * 14
+					context.fillStyle = "black"
+				}
 
+				if (width > 0 && width <= damage * 14) {
+					context.fillRect(31 + (target.hp + damage) * 14 - width, 11, width, 2)
+				}
+
+				if (time <= 45) {
 					// battle result
 					let value = cache.attack.value
 					if (!value) {
@@ -828,6 +974,8 @@ export function render(view, game) {
 			}
 		}
 	}
+
+
 
 	if (menu) {
 		let box = menu.box
@@ -1133,7 +1281,7 @@ export function render(view, game) {
 		renderLayers(layers, order, viewport, context)
 	}
 
-	if (!anims.length && !attack || !cache.phase.pending) {
+	if (!anims.length && !attack && updated || !cache.phase.pending) {
 		if (cache.phase.faction !== game.phase.faction) {
 			cursor.cell = game.phase.pending[0].cell.slice()
 			anims.push(Anim("phase", game.phase.faction, Anims.phase()))

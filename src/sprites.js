@@ -465,8 +465,8 @@ function typeface(image) {
 		`UVWXYZ,.!?` +
 		`abcdefghij` +
 		`klmnopqrst` +
-		`uvwxyz'"/\\` +
-		`()        `
+		`uvwxyz;:'"` +
+		`()/\\-     `
 
 	let typeface = {}
 	let i = 0
