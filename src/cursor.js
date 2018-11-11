@@ -17,13 +17,13 @@ export function update(cursor, keys, game, view) {
 			}
 		} else {
 			let unit = cursor.selection.unit
-			if (phase.pending.includes(unit)) {
+			if (phase.pending.includes(unit) && phase.faction === "player") {
 				let index = map.units.indexOf(unit)
 				let cached = view.cache.units[index]
 				let range = view.cache.ranges[index]
 				if (range) {
 					let path = view.cache.path
-					if (path && path.length) {
+					if (path && path.length > 1) {
 						let dest = path[path.length - 1].slice()
 						let target = Map.unitAt(map, cursor.cell)
 						if (range.move.find(cell => Cell.equals(cell, cursor.cell))) {
@@ -228,7 +228,6 @@ export function cycle(cursor, game, reverse) {
 		}
 		index = i
 		other = allies[index]
-		console.log(index, other)
 	} else if (!reverse) {
 		// cycle forward (+1)
 		if (index + 1 < units.length) {
