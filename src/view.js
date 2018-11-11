@@ -764,7 +764,12 @@ export function render(view, game) {
 				// remove dead unit from map
 				let index = map.units.indexOf(target)
 				map.units.splice(index, 1)
-				log.push(`${target.name} is defeated.`)
+
+				if (target.faction === "player") {
+					log.push(`${target.name} is defeated.`)
+				} else if (target.faction === "enemy") {
+					log.push(`Defeated ${target.name}.`)
+				}
 			}
 
 			if (time >= 60 && target.hp || time >= 90) {
