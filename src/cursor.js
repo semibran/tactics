@@ -195,9 +195,41 @@ export function cycle(cursor, game, reverse) {
 	let index = units.indexOf(unit)
 	if (units === phase.pending && index === -1) {
 		index = allies.indexOf(unit)
-		units = allies
-	}
-	if (!reverse) {
+		if (!reverse) {
+			for (var i = index + 1; i < allies.length; i++) {
+				let ally = allies[i]
+				if (phase.pending.includes(ally)) {
+					break
+				}
+			}
+			if (i === allies.length) {
+				for (var i = 0; i < index; i++) {
+					let ally = allies[i]
+					if (phase.pending.includes(ally)) {
+						break
+					}
+				}
+			}
+		} else {
+			for (var i = index - 1; i >= 0; i--) {
+				let ally = allies[i]
+				if (phase.pending.includes(ally)) {
+					break
+				}
+			}
+			if (i === -1) {
+				for (var i = allies.length - 1; i > index; i--) {
+					let ally = allies[i]
+					if (phase.pending.includes(ally)) {
+						break
+					}
+				}
+			}
+		}
+		index = i
+		other = allies[index]
+		console.log(index, other)
+	} else if (!reverse) {
 		// cycle forward (+1)
 		if (index + 1 < units.length) {
 			other = units[index + 1]
