@@ -187,11 +187,16 @@ export function cycle(cursor, game, reverse) {
 		return
 	}
 
+	let other = null
+	let allies = map.units.filter(other => other.faction === unit.faction)
 	let units = unit.faction === phase.faction
 		? phase.pending
-		: map.units.filter(other => other.faction === unit.faction)
+		: allies
 	let index = units.indexOf(unit)
-	let other = null
+	if (index === -1 && units === phase.pending) {
+		index = allies.indexOf(unit)
+		units = allies
+	}
 	if (!reverse) {
 		// cycle forward (+1)
 		if (index + 1 < units.length) {
