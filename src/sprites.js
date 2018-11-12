@@ -2,11 +2,7 @@ import sourcemap from "../dist/tmp/sprites.json"
 import extract from "../lib/img-extract"
 import pixels from "../lib/pixels"
 import Canvas from "../lib/canvas"
-
-const colors = {
-	black: [   0,   0,   0, 255 ],
-	white: [ 255, 255, 255, 255 ]
-}
+import colors from "./palette"
 
 const symbols = {
 	warrior: "axe",
@@ -68,24 +64,6 @@ function pieces(sprites) {
 		symbols: sprites.symbols,
 		shadow: sprites.shadow
 	}
-
-	let palette = sprites.palette
-		.getContext("2d")
-		.getImageData(0, 0, 3, 3)
-
-	Object.assign(colors, {
-		cyan: pixels.get(palette, 0, 0),
-		blue: pixels.get(palette, 1, 0),
-		navy: pixels.get(palette, 2, 0),
-
-		pink:   pixels.get(palette, 0, 1),
-		red:    pixels.get(palette, 1, 1),
-		purple: pixels.get(palette, 2, 1),
-
-		lime:  pixels.get(palette, 0, 2),
-		green: pixels.get(palette, 1, 2),
-		teal:  pixels.get(palette, 2, 2)
-	})
 
 	let palettes = {
 		player: [ colors.cyan, colors.blue, colors.navy ],

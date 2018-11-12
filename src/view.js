@@ -3,16 +3,13 @@ import * as Map from "../lib/map"
 import * as Unit from "../lib/unit"
 import * as Cell from "../lib/cell"
 import * as Game from "../lib/game"
+import rgba from "../lib/rgba"
 import pathfind from "../lib/pathfind"
 import Canvas from "../lib/canvas"
 import Anims from "./anims"
 import Anim from "./anim"
+import colors from "./palette"
 
-const blue = "rgb(80, 120, 248)"
-const red = "rgb(208, 0, 88)"
-const cyan = "rgb(144, 224, 232)"
-const pink = "rgb(248, 192, 224)"
-const black = [ 0, 0, 0, 255 ]
 const symbols = {
 	warrior: "axe",
 	knight: "shield",
@@ -840,7 +837,7 @@ export function render(view, game) {
 				let width = 0
 				if (time * 2 <= damage * 14) {
 					width = Math.min(damage * 14, time * 2)
-					context.fillStyle = red
+					context.fillStyle = rgba(colors.red)
 				} else {
 					width = time - damage * 14
 					context.fillStyle = "black"
@@ -896,36 +893,56 @@ export function render(view, game) {
 					// battle result
 					let value = cache.attack.value
 					if (!value) {
-						let text = null
-						if (power === null) {
-							text = "MISS"
+						let color = colors.gray
+						let content = null
+						if (power === 3) {
+							content = "3!"
 						} else if (power === 0) {
-							text = "0"
-						} else if (power === 3) {
-							text = "3!!"
+							content = "0"
+						} else if (power === null) {
+							content = "MISS"
 						} else {
-							text = power.toString()
+							content = power.toString()
+							color = colors.red
 						}
-						let context = Canvas(text.length * 8 + 1, 9)
-						context.drawImage(sprites.ui.Text(text, black), 1, 1)
-						context.drawImage(sprites.ui.Text(text),        0, 0)
+						let animation = []
+						let text = sprites.ui.Text(content)
+						if (power === 3) {
+							let red = sprites.ui.Text(content, colors.red)
+							let a = Canvas(content.length * 8 + 1, 9)
+							a.drawImage(red, 1, 1)
+							a.drawImage(text, 0, 0)
+							let b = Canvas(content.length * 8 + 1, 9)
+							b.drawImage(text, 1, 1)
+							b.drawImage(red, 0, 0)
+							animation.push(a.canvas, a.canvas, b.canvas, b.canvas)
+						} else {
+							let shadow = sprites.ui.Text(content, color)
+							let context = Canvas(content.length * 8 + 1, 9)
+							context.drawImage(shadow, 1, 1)
+							context.drawImage(text, 0, 0)
+							animation.push(context.canvas)
+						}
 						value = cache.attack.value = {
 							offset: 0,
 							velocity: -2,
-							image: context.canvas
+							images: animation
 						}
 					} else {
 						value.offset += value.velocity
 						value.velocity += 0.25
-						if (value.offset > 0) {
-							value.offset = 0
+						let min = 0
+						if (value.offset > min) {
+							value.offset = min
 							value.velocity *= -1 / 3
 						}
 					}
+					let index = time % value.images.length
+					let image = value.images[index]
 					layers.effects.push({
-						image: value.image,
+						image: image,
 						position: [
-							target.cell[0] * 16 + 8 - value.image.width / 2,
+							target.cell[0] * 16 + 8 - image.width / 2,
 							target.cell[1] * 16 - 12 + value.offset
 						]
 					})
@@ -1315,8 +1332,8 @@ export function render(view, game) {
 
 		let bg = Canvas(256 * (data.bg.width - data.bg.x), 2 + 10 * data.bg.height)
 		bg.fillStyle = anim.target === "player"
-			? blue
-			: red
+			? rgba(colors.blue)
+			: rgba(colors.red)
 		bg.fillRect(0, 0, bg.canvas.width, bg.canvas.height)
 
 		if (bg.canvas.width) {
