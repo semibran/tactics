@@ -39,8 +39,9 @@ export function create(width, height, sprites) {
 			viewport: {
 				size: [ width, height ],
 				position: null,
-				offset: [ 0, 0 ],
 				target: null,
+				velocity: [ 0, 0 ],
+				offset: [ 0, 0 ],
 				shake: 0
 			},
 			ai: {
@@ -189,7 +190,7 @@ export function render(view, game) {
 	}
 
 	let enemies = map.units.filter(unit => unit.faction === "enemy")
-	let enemy = ai.strategy ? enemies[ai.index] : null
+	let enemy = ai.strategy ? ai.allies[ai.index] : null
 	let actions = dialog && dialog.type === "actions" && dialog
 	let forecast = dialog && dialog.type === "forecast" && dialog
 	let pause = dialog && dialog.type === "pause" && dialog
@@ -333,8 +334,14 @@ export function render(view, game) {
 	if (!viewport.position) {
 		viewport.position = viewport.target.slice()
 	} else {
-		viewport.position[0] += (viewport.target[0] - viewport.position[0]) / 16
-		viewport.position[1] += (viewport.target[1] - viewport.position[1]) / 16
+		let disp = [
+			viewport.target[0] - viewport.position[0],
+			viewport.target[1] - viewport.position[1],
+		]
+		viewport.velocity[0] += (disp[0] / 16 - viewport.velocity[0]) / 4
+		viewport.velocity[1] += (disp[1] / 16 - viewport.velocity[1]) / 4
+		viewport.position[0] += viewport.velocity[0]
+		viewport.position[1] += viewport.velocity[1]
 	}
 
 	if (cache.attack && cache.attack.connected && cache.attack.time === 1) {

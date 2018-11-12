@@ -64,19 +64,24 @@ function main(spritesheet) {
 				let action = turn && turn[ai.action]
 				if (action) {
 					let [ type, target ] = action
+					let viewport = view.state.viewport
+					let distance = Cell.manhattan(viewport.position, viewport.target)
+					let nearby = distance < 96
 					if (type === "move") {
 						if (!anims.length) {
 							if (!ai.moved) {
-								ai.moved = true
-								let range = Unit.range(game.map, unit)
-								let cells = range.move.slice()
-								for (let enemy of ai.allies) {
-									cells.push(enemy.cell)
+								if (nearby) {
+									ai.moved = true
+									let range = Unit.range(game.map, unit)
+									let cells = range.move.slice()
+									for (let enemy of ai.allies) {
+										cells.push(enemy.cell)
+									}
+									let path = pathfind(cells, unit.cell, target)
+									view.cache.path = path
+									view.cache.moved = false
+									unit.cell = target.slice()
 								}
-								let path = pathfind(cells, unit.cell, target)
-								view.cache.path = path
-								view.cache.moved = false
-								unit.cell = target.slice()
 							} else {
 								ai.action++
 								view.cache.moved = false
@@ -88,32 +93,31 @@ function main(spritesheet) {
 						let damage = Math.min(target.hp, Number(power))
 						if (!view.state.attacks.length) {
 							if (!ai.attacked) {
-								ai.attacked = true
-								Unit.attack(unit, target)
-								view.cache.target = { unit: target, time: 0 }
-								view.state.attacks.push({
-									attacker: unit,
-									target: target,
-									power: power,
-									damage: damage,
-								})
-								if (target.hp && Cell.manhattan(target.cell, unit.cell) <= Unit.rng(target)) {
-									let power = Unit.dmg(target, unit)
-									let damage = Math.min(unit.hp, Number(power))
-									Unit.attack(target, unit)
+								if (nearby) {
+									ai.attacked = true
+									Unit.attack(unit, target)
+									view.cache.target = { unit: target, time: 0 }
 									view.state.attacks.push({
-										attacker: target,
-										target: unit,
+										attacker: unit,
+										target: target,
 										power: power,
 										damage: damage,
-										counter: true
 									})
-									if (!target.hp) {
-										ai.casualties++
+									if (target.hp && Cell.manhattan(target.cell, unit.cell) <= Unit.rng(target)) {
+										let power = Unit.dmg(target, unit)
+										let damage = Math.min(unit.hp, Number(power))
+										Unit.attack(target, unit)
+										view.state.attacks.push({
+											attacker: target,
+											target: unit,
+											power: power,
+											damage: damage,
+											counter: true
+										})
 									}
+									cursor.selection = { unit, time: 0 }
+									cursor.under = unit
 								}
-								cursor.selection = { unit, time: 0 }
-								cursor.under = unit
 							} else {
 								ai.action++
 								cursor.selection = null
