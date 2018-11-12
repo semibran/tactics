@@ -865,13 +865,13 @@ export function render(view, game) {
 				}
 			} else {
 				// particles
-				if (time === 1) {
+				if (time === 1 && power !== null) {
 					let disp = [ target.cell[0] - attacker.cell[0], target.cell[1] - attacker.cell[1] ]
 					let dist = Math.sqrt(disp[0] * disp[0] + disp[1] * disp[1])
 					let norm = [ disp[0] / dist, disp[1] / dist ]
 					let radians = Math.atan2(disp[1], disp[0])
 					let origin = [ target.cell[0] * 16 + 8 - norm[0] * 4, target.cell[1] * 16 + 8 - norm[1] * 4 ]
-					let total = damage / 3 * 48
+					let total = (damage + 1) / 2 * 48
 					for (let i = 0; i < total; i++) {
 						let size = "small"
 						if (Math.random() < 0.25) {
@@ -944,9 +944,6 @@ export function render(view, game) {
 		particle.velocity[1] *= 0.875
 		let percent = Math.random()
 		layers.effects.push(particle)
-		/*
-		if (percent >= particle.time / 60) {
-		}*/
 		if (percent < particle.time / 240) {
 			particles.splice(i--, 1)
 		}
