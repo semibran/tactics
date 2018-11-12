@@ -14,6 +14,7 @@ happy refreshing!
 $ git clone git@github.com:semibran/tactics.git
 ...
 $ cd tactics
+$ npm i
 $ make
 ```
 
