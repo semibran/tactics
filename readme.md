@@ -3,7 +3,7 @@
 
 [play the demo][demo]
 
-[![tactics project gameplay][./gameplay.gif]][demo]
+[![tactics project gameplay](./gameplay.gif)][demo]
 
 a small [trpg] inspired by [fire emblem]. i've attempted to remove any and all elements that hamper strategic gameplay in favor of determinism and semi-perfect information a la chess, so no RNG-based combat or unexpected reinforcements. predictable AI and RPS-style unit interactions are still alive and well however.
 
