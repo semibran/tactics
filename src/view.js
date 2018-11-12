@@ -12,6 +12,7 @@ const blue = "rgb(80, 120, 248)"
 const red = "rgb(208, 0, 88)"
 const cyan = "rgb(144, 224, 232)"
 const pink = "rgb(248, 192, 224)"
+const black = [ 0, 0, 0, 255 ]
 const symbols = {
 	warrior: "axe",
 	knight: "shield",
@@ -905,10 +906,13 @@ export function render(view, game) {
 						} else {
 							text = power.toString()
 						}
+						let context = Canvas(text.length * 8 + 1, 9)
+						context.drawImage(sprites.ui.Text(text, black), 1, 1)
+						context.drawImage(sprites.ui.Text(text),        0, 0)
 						value = cache.attack.value = {
 							offset: 0,
 							velocity: -2,
-							image: sprites.ui.Text(text)
+							image: context.canvas
 						}
 					} else {
 						value.offset += value.velocity

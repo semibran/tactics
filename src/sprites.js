@@ -3,6 +3,11 @@ import extract from "../lib/img-extract"
 import pixels from "../lib/pixels"
 import Canvas from "../lib/canvas"
 
+const colors = {
+	black: [   0,   0,   0, 255 ],
+	white: [ 255, 255, 255, 255 ]
+}
+
 const symbols = {
 	warrior: "axe",
 	knight: "shield",
@@ -68,10 +73,7 @@ function pieces(sprites) {
 		.getContext("2d")
 		.getImageData(0, 0, 3, 3)
 
-	let colors = {
-		black: [   0,   0,   0, 255 ],
-		white: [ 255, 255, 255, 255 ],
-
+	Object.assign(colors, {
 		cyan: pixels.get(palette, 0, 0),
 		blue: pixels.get(palette, 1, 0),
 		navy: pixels.get(palette, 2, 0),
@@ -83,7 +85,7 @@ function pieces(sprites) {
 		lime:  pixels.get(palette, 0, 2),
 		green: pixels.get(palette, 1, 2),
 		teal:  pixels.get(palette, 2, 2)
-	}
+	})
 
 	let palettes = {
 		player: [ colors.cyan, colors.blue, colors.navy ],
@@ -225,6 +227,8 @@ function ui(sprites) {
 		}
 	}
 
+	let coloredTypefaces = {}
+
 	ui.Text = Text
 	ui.Box = Box
 	ui.TextBox = TextBox
@@ -234,7 +238,7 @@ function ui(sprites) {
 
 	return ui
 
-	function Text(content) {
+	function Text(content, color) {
 		let width = 0
 		for (let i = 0; i < content.length; i++) {
 			let char = content[i]
@@ -255,13 +259,38 @@ function ui(sprites) {
 			if (char === " ") {
 				x += 4
 			} else {
-				let sprite = ui.typeface[char]
+				let sprite = Char(char, color)
 				context.drawImage(sprite, x, 0)
 				x += 8
 			}
 		}
 
 		return canvas
+	}
+
+	function Char(char, color) {
+		if (!color) {
+			return ui.typeface[char]
+		}
+
+		if (coloredTypefaces[color]) {
+			return coloredTypefaces[color][char]
+		}
+
+		let sprite = sprites.typeface
+		let image = sprite
+			.getContext("2d")
+			.getImageData(0, 0, sprite.width, sprite.height)
+
+		console.log(color)
+		pixels.replace(image, colors.white, color)
+
+		let context = Canvas(sprite.width, sprite.height)
+		context.putImageData(image, 0, 0)
+
+		let chars = typeface(context.canvas)
+		coloredTypefaces[color] = chars
+		return chars[char]
 	}
 
 	function Box(width, height) {
