@@ -9,6 +9,12 @@ a small [trpg] inspired by [fire emblem]. i've attempted to remove any and all e
 
 happy refreshing!
 
+## controls
+* arrow keys/`WASD`: move cursor
+* `spacebar`: select units and confirm actions
+* `escape`: cancel current action
+* `tab`: cycle through units or options
+
 ## install
 ```sh
 $ git clone git@github.com:semibran/tactics.git
