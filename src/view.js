@@ -57,6 +57,7 @@ export function create(width, height, sprites) {
 		},
 		cache: {
 			map: null,
+			cursor: null,
 			selection: null,
 			selected: null,
 			target: null,
@@ -148,7 +149,7 @@ export function render(view, game) {
 		cache.units = map.units.map(unit => Object.assign({ original: unit }, unit))
 	}
 
-	if (!cache.map) {
+	/*if (!cache.map) {
 		cache.map = drawMap(map, sprites.tiles)
 	}
 
@@ -159,6 +160,11 @@ export function render(view, game) {
 
 	layers.walls.push({
 		image: cache.map.walls,
+		position: [ 0, 0 ]
+	})*/
+
+	layers.floors.push({
+		image: sprites.maps[map.id],
 		position: [ 0, 0 ]
 	})
 
@@ -443,75 +449,81 @@ export function render(view, game) {
 		}
 
 		let path = cache.path
-		let target = Map.unitAt(map, cursor.cell)
-		if (Cell.equals(cursor.cell, unit.cell)) {
-			if (path) {
-				path.length = 1
-			}
-		} else if (game.phase.pending.includes(unit)
-		&& cursor.selection
-		) {
-			let cells = range.move.slice()
-			let allies = map.units.filter(other => Unit.allied(unit, other))
-			for (let ally of allies) {
-				cells.push(ally.cell)
-			}
-
-			let dest = unit.cell
-			if (path && path.length) {
-				dest = path[path.length - 1]
-			}
-
-			if (range.move.find(cell => Cell.equals(cursor.cell, cell))) {
-				if (!path) {
-					path = cache.path = pathfind(cells, unit.cell, cursor.cell)
-				} else {
-					for (var i = 0; i < path.length; i++) {
-						let cell = path[i]
-						if (Cell.equals(cursor.cell, cell)) {
-							break
-						}
-					}
-					if (i < path.length - 1) {
-						// truncate the path up to the current cell
-						path.splice(i + 1, path.length - i - 1)
-					} else {
-						let pathless = cells.filter(cell => !path.find(other => Cell.equals(cell, other)))
-						let prev = path[path.length - 1]
-						let ext = pathfind(pathless, prev, cursor.cell)
-						if (ext && path.length + ext.length - 2 <= Unit.mov(unit)) {
-							ext.shift() // exclude duplicate start cell
-							path.push(...ext)
-						} else {
-							path = cache.path = pathfind(cells, unit.cell, cursor.cell)
-						}
-					}
-				}
-			} else if (target && !Unit.allied(unit, target)
-			&& Cell.manhattan(dest, target.cell) > unit.equipment.weapon.rng
-			) {
-				let neighbors = Cell.neighborhood(target.cell, unit.equipment.weapon.rng)
+		if (!cache.cursor || !Cell.equals(cache.cursor, cursor.cell)) {
+			cache.cursor = cursor.cell.slice()
+			let target = Map.unitAt(map, cursor.cell)
+			if (Cell.equals(cursor.cell, unit.cell)) {
 				if (path) {
-					for (var i = path.length; i--;) {
-						let cell = path[i]
-						if (target) {
-							if (neighbors.find(neighbor => Cell.equals(cell, neighbor))) {
-								path.splice(i + 1, path.length - i - 1)
+					path.length = 1
+				}
+			} else if (game.phase.pending.includes(unit)
+			&& cursor.selection
+			) {
+				let cells = range.move.slice()
+				let allies = map.units.filter(other => Unit.allied(unit, other))
+				for (let ally of allies) {
+					cells.push(ally.cell)
+				}
+
+				let dest = unit.cell
+				if (path && path.length) {
+					dest = path[path.length - 1]
+				}
+
+				if (range.move.find(cell => Cell.equals(cursor.cell, cell))) {
+					if (!path) {
+						path = cache.path = pathfind(map, unit.cell, cursor.cell, cells)
+					} else {
+						for (var i = 0; i < path.length; i++) {
+							let cell = path[i]
+							if (Cell.equals(cursor.cell, cell)) {
 								break
 							}
 						}
-					}
-				}
-				if (!path || i === -1) {
-					let dest = null
-					for (let i = 0; i < range.move.length; i++) {
-						let cell = range.move[i]
-						if (neighbors.find(neighbor => Cell.equals(cell, neighbor))) {
-							dest = cell
-							break
+						if (i < path.length - 1) {
+							// cell is already in path
+							// truncate the path up to the current cell
+							path.splice(i + 1, path.length - i - 1)
+						} else {
+							// trace path from last cell to cursor
+							let pathless = cells.filter(cell => !path.find(other => Cell.equals(cell, other)))
+							let ext = pathfind(map, dest, cursor.cell, pathless)
+							if (ext && path.length + ext.length - 2 <= Unit.mov(unit)) {
+								// new path is usable
+								ext.shift() // exclude duplicate start cell
+								path.push(...ext)
+							} else {
+								// new path is too long, recalculate
+								path = cache.path = pathfind(map, unit.cell, cursor.cell, cells)
+							}
 						}
 					}
-					path = cache.path = pathfind(cells, unit.cell, dest)
+				} else if (target && !Unit.allied(unit, target)
+				&& Cell.manhattan(dest, target.cell) > unit.equipment.weapon.rng
+				) {
+					let neighbors = Cell.neighborhood(target.cell, unit.equipment.weapon.rng)
+					if (path) {
+						for (var i = path.length; i--;) {
+							let cell = path[i]
+							if (target) {
+								if (neighbors.find(neighbor => Cell.equals(cell, neighbor))) {
+									path.splice(i + 1, path.length - i - 1)
+									break
+								}
+							}
+						}
+					}
+					if (!path || i === -1) {
+						let dest = null
+						for (let i = 0; i < range.move.length; i++) {
+							let cell = range.move[i]
+							if (neighbors.find(neighbor => Cell.equals(cell, neighbor))) {
+								dest = cell
+								break
+							}
+						}
+						path = cache.path = pathfind(map, unit.cell, dest, cells)
+					}
 				}
 			}
 		}
@@ -1397,20 +1409,73 @@ function drawMap(map, sprites) {
 			let tile = Map.tileAt(map, [ col, row ])
 			let sprite = null
 			if (tile.name === "wall") {
+				sprite = sprites.wall.top
 				if (row + 1 < rows && Map.tileAt(map, [ col, row + 1 ]).name !== "wall") {
-					sprite = sprites["wall-base"]
-				} else {
-					sprite = sprites.wall
+					sprite = sprites.wall.base
 				}
 				walls.drawImage(sprite, x, y)
+			} else if (tile.name === "floor") {
+				sprite = sprites.floor.default
+				if (col > 0
+				&& Map.tileAt(map, [ col - 1, row ]).name !== "floor"
+				) {
+					sprite = sprites.floor.left
+				} else if (col + 1 < cols
+				&& Map.tileAt(map, [ col + 1, row ]).name !== "floor"
+				) {
+					sprite = sprites.floor.right
+				}
+				floors.drawImage(sprite, x, y)
+			} else if (tile.name === "falls") {
+				sprite = sprites.falls.default[0]
+				if (row + 1 < rows
+				&& Map.tileAt(map, [ col, row + 1 ]).name !== "falls"
+				) {
+					sprite = sprites.falls.base[0]
+				}
+				floors.drawImage(sprite, x, y)
+			} else if (tile.name === "cliff") {
+				sprite = sprites.cliff.default
+				let top = row > 0
+					&& Map.tileAt(map, [ col, row - 1 ]).name === "grass"
+				let base = row + 1 < rows
+					&& Map.tileAt(map, [ col, row + 1 ]).name === "water"
+				let left = col > 0
+					&& Map.tileAt(map, [ col - 1, row ]).name !== "cliff"
+				let right = col + 1 < cols
+					&& Map.tileAt(map, [ col + 1, row ]).name !== "cliff"
+				if (top) {
+					if (left) {
+						sprite = sprites.cliff.topLeft
+					} else if (right) {
+						sprite = sprites.cliff.topRight
+					} else {
+						sprite = sprites.cliff.top
+					}
+				} else if (base) {
+					if (left) {
+						sprite = sprites.cliff.baseLeft
+					} else if (right) {
+						sprite = sprites.cliff.baseRight
+					} else {
+						sprite = sprites.cliff.base
+					}
+				} else if (left) {
+					sprite = sprites.cliff.left
+				} else if (right) {
+					sprite = sprites.cliff.right
+				}
+				floors.drawImage(sprite, x, y)
 			} else {
 				let shadow = null
-				if (col - 1 >= 0 && Map.tileAt(map, [ col - 1, row ]).name === "wall"
-				&& row - 1 >= 0 && Map.tileAt(map, [ col - 1, row - 1 ]).name !== "wall"
-				) {
-					shadow = sprites["shadow-corner"]
-				} else if (col - 1 >= 0 && Map.tileAt(map, [ col - 1, row ]).name === "wall") {
-					shadow = sprites["shadow-edge"]
+				if (col - 1 >= 0 && Map.tileAt(map, [ col - 1, row ]).name === "wall") {
+					if (row - 1 >= 0
+					&& Map.tileAt(map, [ col - 1, row - 1 ]).name !== "wall"
+					) {
+						shadow = sprites.shadow.corner
+					} else {
+						shadow = sprites.shadow.edge
+					}
 				}
 				sprite = sprites[tile.name]
 				floors.drawImage(sprite, x, y)

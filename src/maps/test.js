@@ -1,45 +1,23 @@
-const grass = { name: "grass", solid: false }
-const floor = { name: "floor", solid: false }
-const wall  = { name: "wall",  solid: true  }
+const i = Infinity
+const s = 0.5
 
 export default {
-	tiles: { grass, floor, wall },
+	id: "test",
 	layout: {
-		size: [ 20, 20 ],
+		size: [ 8, 8 ],
 		data: [
-			"           #########",
-			"       ##  #......##",
-			" #     ##  ##......#",
-			" #         ##....###",
-			"            ###..###",
-			"          #####...##",
-			"      ##  ###.#...# ",
-			"      ##  #.......# ",
-			"          ....##### ",
-			"#         #...##### ",
-			"#    #    #####     ",
-			"     #    #####     ",
-			"                    ",
-			"                    ",
-			"        ##    #     ",
-			"        ##    #     ",
-			" #               ## ",
-			" ##    #         ## ",
-			" ##    #            ",
-			"                    ",
+			2, 2, 2, 2, 2, 2, 2, 2,
+			2, 2, 2, 1, 1, 2, 2, 2,
+			2, 2, 2, 0, 0, i, 2, 2,
+			2, 2, 2, 0, 0, i, 2, 2,
+			i, i, i, 0, 0, 0, i, i,
+			i, i, i, 0, 0, 0, i, i,
+			0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0
 		]
-			.join("")
-			.split("")
-			.map(char => {
-				switch (char) {
-					case " ": return grass
-					case ".": return floor
-					case "#": return wall
-				}
-			})
 	},
 	units: [
-		[ "Hector", "warrior", "player", false,    [ 15,  4 ] ],
-		[ "Nergal", "mage",    "enemy",  "defend", [ 15,  1 ] ],
+		[ "Hector", "warrior", "player", false,    [ 4, 6 ] ],
+		[ "Nergal", "mage",    "enemy",  "defend", [ 1, 2 ] ],
 	]
 }

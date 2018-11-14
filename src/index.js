@@ -15,7 +15,7 @@ import Anim from "./anim"
 
 loadImage("sprites.png").then(main)
 
-let map = maps.hideout
+let map = maps.test
 let game = Game.create(map)
 let keys = Keys.create(window)
 
