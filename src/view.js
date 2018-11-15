@@ -539,7 +539,7 @@ export function render(view, game) {
 		}
 
 		if (path && (cursor.selection && !cache.moved || moving && time % 2)) {
-			let arrow = sprites.ui.Arrow(path, cache.phase.faction)
+			let arrow = sprites.ui.Arrow(path)
 			layers.arrows.push(...arrow.map(sprite => ({
 				image: sprite.image,
 				position: [ sprite.position[0] * 16, sprite.position[1] * 16 ]
@@ -1348,7 +1348,8 @@ export function render(view, game) {
 	if (phasing) {
 		let x = 0
 		let data = anim.data
-		let text = sprites.ui.phases[anim.target]
+		let id = anim.target + "Phase"
+		let text = sprites.ui.words[id]
 		if (data.state === "enter") {
 			let origin = -text.width
 			let target = viewport.size[0] / 2 - text.width / 2 - 3

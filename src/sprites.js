@@ -145,64 +145,14 @@ function pieces(sprites) {
 
 function ui(sprites) {
 	let ui = {
-		symbols: sprites.symbols,
-		swords:  sprites.swords,
-		cursor:  cursor(sprites.cursor),
-		typeface: typeface(sprites.typeface),
+		symbols:   sprites.symbols,
+		cursor:    cursor(sprites.cursor),
+		typeface:  typeface(sprites.typeface),
 		healthbar: sprites.healthbar,
-		phases: {
-			player: sprites["player-phase"],
-			enemy: sprites["enemy-phase"]
-		},
-		box: {
-			topLeft:     extract(sprites.box,  0,  0, 16, 16),
-			top:         extract(sprites.box, 16,  0, 16, 16),
-			topRight:    extract(sprites.box, 32,  0, 16, 16),
-			left:        extract(sprites.box,  0, 16, 16, 16),
-			center:      extract(sprites.box, 16, 16, 16, 16),
-			right:       extract(sprites.box, 32, 16, 16, 16),
-			bottomLeft:  extract(sprites.box,  0, 32, 16, 16),
-			bottom:      extract(sprites.box, 16, 32, 16, 16),
-			bottomRight: extract(sprites.box, 32, 32, 16, 16),
-		},
-		squares: {
-			move:   extract(sprites.squares,  0, 0, 16, 16),
-			attack: extract(sprites.squares, 16, 0, 16, 16)
-		},
-		arrows: {
-			player: {
-				left:      extract(sprites.arrows,  0,  0, 16, 16),
-				right:     extract(sprites.arrows, 16,  0, 16, 16),
-				up:        extract(sprites.arrows, 32,  0, 16, 16),
-				down:      extract(sprites.arrows, 48,  0, 16, 16),
-				leftStub:  extract(sprites.arrows,  0, 16, 16, 16),
-				rightStub: extract(sprites.arrows, 16, 16, 16, 16),
-				upStub:    extract(sprites.arrows, 32, 16, 16, 16),
-				downStub:  extract(sprites.arrows, 48, 16, 16, 16),
-				upLeft:    extract(sprites.arrows,  0, 32, 16, 16),
-				upRight:   extract(sprites.arrows, 16, 32, 16, 16),
-				downLeft:  extract(sprites.arrows, 32, 32, 16, 16),
-				downRight: extract(sprites.arrows, 48, 32, 16, 16),
-				horiz:     extract(sprites.arrows,  0, 48, 16, 16),
-				vert:      extract(sprites.arrows, 16, 48, 16, 16)
-			},
-			enemy: {
-				left:      extract(sprites.arrows,  0,  64, 16, 16),
-				right:     extract(sprites.arrows, 16,  64, 16, 16),
-				up:        extract(sprites.arrows, 32,  64, 16, 16),
-				down:      extract(sprites.arrows, 48,  64, 16, 16),
-				leftStub:  extract(sprites.arrows,  0,  80, 16, 16),
-				rightStub: extract(sprites.arrows, 16,  80, 16, 16),
-				upStub:    extract(sprites.arrows, 32,  80, 16, 16),
-				downStub:  extract(sprites.arrows, 48,  80, 16, 16),
-				upLeft:    extract(sprites.arrows,  0,  96, 16, 16),
-				upRight:   extract(sprites.arrows, 16,  96, 16, 16),
-				downLeft:  extract(sprites.arrows, 32,  96, 16, 16),
-				downRight: extract(sprites.arrows, 48,  96, 16, 16),
-				horiz:     extract(sprites.arrows,  0, 112, 16, 16),
-				vert:      extract(sprites.arrows, 16, 112, 16, 16)
-			}
-		}
+		words:     words(sprites.words),
+		box:       box(sprites.box),
+		squares:   squares(sprites.squares),
+		arrows:    arrows(sprites.arrows)
 	}
 
 	let coloredTypefaces = {}
@@ -215,6 +165,75 @@ function ui(sprites) {
 	ui.Arrow = Arrow
 
 	return ui
+
+	function arrows(sheet) {
+		return {
+			left:      extract(sheet,  0,  0, 16, 16),
+			right:     extract(sheet, 16,  0, 16, 16),
+			up:        extract(sheet, 32,  0, 16, 16),
+			down:      extract(sheet, 48,  0, 16, 16),
+			leftStub:  extract(sheet,  0, 16, 16, 16),
+			rightStub: extract(sheet, 16, 16, 16, 16),
+			upStub:    extract(sheet, 32, 16, 16, 16),
+			downStub:  extract(sheet, 48, 16, 16, 16),
+			upLeft:    extract(sheet,  0, 32, 16, 16),
+			upRight:   extract(sheet, 16, 32, 16, 16),
+			downLeft:  extract(sheet, 32, 32, 16, 16),
+			downRight: extract(sheet, 48, 32, 16, 16),
+			horiz:     extract(sheet,  0, 48, 16, 16),
+			vert:      extract(sheet, 16, 48, 16, 16)
+		}
+	}
+
+	function squares(sheet) {
+		return {
+			move:   extract(sheet,  0, 0, 16, 16),
+			attack: extract(sheet, 16, 0, 16, 16)
+		}
+	}
+
+	function box(sheet) {
+		return {
+			topLeft:     extract(sheet,  0,  0, 16, 16),
+			top:         extract(sheet, 16,  0, 16, 16),
+			topRight:    extract(sheet, 32,  0, 16, 16),
+			left:        extract(sheet,  0, 16, 16, 16),
+			center:      extract(sheet, 16, 16, 16, 16),
+			right:       extract(sheet, 32, 16, 16, 16),
+			bottomLeft:  extract(sheet,  0, 32, 16, 16),
+			bottom:      extract(sheet, 16, 32, 16, 16),
+			bottomRight: extract(sheet, 32, 32, 16, 16)
+		}
+	}
+
+	function words(sprites) {
+		let playerPhase = Canvas(188, 18)
+		render(playerPhase, sprites.player, colors.blue, 0)
+		render(playerPhase, sprites.phase, colors.blue, 104)
+
+		let enemyPhase = Canvas(170, 18)
+		render(enemyPhase, sprites.enemy, colors.red, 0)
+		render(enemyPhase, sprites.phase, colors.red, 90)
+
+		return {
+			playerPhase: playerPhase.canvas,
+			enemyPhase: enemyPhase.canvas
+		}
+
+		function render(context, word, color, x) {
+			let shadow = word
+				.getContext("2d")
+				.getImageData(0, 0, word.width, word.height)
+
+			pixels.replace(shadow, colors.white, color)
+
+			let temp = Canvas(word.width, word.height)
+			temp.putImageData(shadow, 0, 0)
+
+			context.drawImage(temp.canvas, x + 2, 2)
+			context.drawImage(word, x, 0)
+		}
+	}
 
 	function Text(content, color) {
 		let width = 0
@@ -372,7 +391,7 @@ function ui(sprites) {
 		}
 	}
 
-	function Arrow(path, faction) {
+	function Arrow(path) {
 		let arrow = []
 		for (let i = 0; i < path.length; i++) {
 			let [ x, y ] = path[i]
@@ -449,7 +468,7 @@ function ui(sprites) {
 
 				if (direction) {
 					arrow.push({
-						image: ui.arrows[faction][direction],
+						image: ui.arrows[direction],
 						position: [ x, y ]
 					})
 				}
