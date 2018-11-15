@@ -63,7 +63,11 @@ export function update(cursor, keys, game, view) {
 					break
 				}
 			}
-			cursor.cell[0] = x
+			if (x !== cursor.cell[0]) {
+				cursor.cell[0] = x
+			} else if (x > 0) {
+				cursor.cell[0]--
+			}
 		} else if (held.right && !prev.right && !held.left) {
 			for (var x = cursor.cell[0]; x < map.layout.size[0]; x++) {
 				for (var i = 0; i < range.move.length; i++) {
@@ -76,7 +80,11 @@ export function update(cursor, keys, game, view) {
 					break
 				}
 			}
-			cursor.cell[0] = x
+			if (x !== cursor.cell[0]) {
+				cursor.cell[0] = x
+			} else if (x < map.layout.size[0] - 1) {
+				cursor.cell[0]++
+			}
 		}
 		if (held.up && !prev.up && !held.down) {
 			for (var y = cursor.cell[1]; y >= 0; y--) {
@@ -90,7 +98,11 @@ export function update(cursor, keys, game, view) {
 					break
 				}
 			}
-			cursor.cell[1] = y
+			if (y !== cursor.cell[1]) {
+				cursor.cell[1] = y
+			} else if (y > 0) {
+				cursor.cell[1]--
+			}
 		} else if (held.down && !prev.down && !held.up) {
 			for (var y = cursor.cell[1]; y < map.layout.size[1]; y++) {
 				for (var i = 0; i < range.move.length; i++) {
@@ -103,7 +115,11 @@ export function update(cursor, keys, game, view) {
 					break
 				}
 			}
-			cursor.cell[1] = y
+			if (y !== cursor.cell[1]) {
+				cursor.cell[1] = y
+			} else if (y < map.layout.size[1] - 1) {
+				cursor.cell[1]++
+			}
 		}
 	} else {
 		if ((held.left && !prev.left || held.left > delay && !(held.left % interval)) && !held.right) {

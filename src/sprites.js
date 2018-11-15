@@ -14,7 +14,6 @@ const symbols = {
 export default function normalize(spritesheet) {
 	let sprites = disassemble(spritesheet, sourcemap)
 	return {
-		tiles:   tiles(sprites.tiles),
 		pieces:  pieces(sprites.piece),
 		ui:      ui(sprites.ui),
 		effects: effects(),
@@ -34,48 +33,6 @@ function disassemble(spritesheet, sourcemap) {
 	}
 
 	return sprites
-}
-
-function tiles(sprites) {
-	return {
-		grass: sprites.grass,
-		water: sprites.water,
-		stairs: sprites.stairs,
-		floor: {
-			left:    extract(sprites.floor, 0,  0, 16, 16),
-			default: extract(sprites.floor, 16, 0, 16, 16),
-			right:   extract(sprites.floor, 32, 0, 16, 16)
-		},
-		wall: {
-			top:  extract(sprites.wall, 0,  0, 16, 16),
-			base: extract(sprites.wall, 0, 16, 16, 16),
-		},
-		cliff: {
-			topLeft:   extract(sprites.cliff,  0,  0, 16, 16),
-			top:       extract(sprites.cliff, 16,  0, 16, 16),
-			topRight:  extract(sprites.cliff, 32,  0, 16, 16),
-			left:      extract(sprites.cliff,  0, 16, 16, 16),
-			default:   extract(sprites.cliff, 16, 16, 16, 16),
-			right:     extract(sprites.cliff, 32, 16, 16, 16),
-			baseLeft:  extract(sprites.cliff,  0, 32, 16, 16),
-			base:      extract(sprites.cliff, 16, 32, 16, 16),
-			baseRight: extract(sprites.cliff, 32, 32, 16, 16),
-		},
-		falls: {
-			default: [
-				extract(sprites.falls,  0, 0, 16, 16),
-				extract(sprites.falls, 16, 0, 16, 16),
-				extract(sprites.falls, 32, 0, 16, 16),
-				extract(sprites.falls, 48, 0, 16, 16)
-			],
-			base: [
-				extract(sprites.falls,  0, 16, 16, 16),
-				extract(sprites.falls, 16, 16, 16, 16),
-				extract(sprites.falls, 32, 16, 16, 16),
-				extract(sprites.falls, 48, 16, 16, 16)
-			]
-		}
-	}
 }
 
 function effects() {

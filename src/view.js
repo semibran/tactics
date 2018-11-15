@@ -127,11 +127,11 @@ export function render(view, game) {
 		"floors",
 		"squares",
 		"shadows",
-		"walls",
 		"pieces",
 		"arrows",
 		"cursor",
 		"selection",
+		"walls",
 		"effects",
 		"ui"
 	]
@@ -165,6 +165,11 @@ export function render(view, game) {
 
 	layers.floors.push({
 		image: sprites.maps[map.id],
+		position: [ 0, 0 ]
+	})
+
+	layers.walls.push({
+		image: sprites.maps["test-tree"],
 		position: [ 0, 0 ]
 	})
 
@@ -276,6 +281,8 @@ export function render(view, game) {
 		}
 	}
 
+	let moving = anim && anim.type === "move"
+	let attacking = anim && anim.type === "attack"
 	let phasing = anim && anim.type === "phase"
 	let focus = null
 	if (!phasing || !viewport.target) {
@@ -286,11 +293,13 @@ export function render(view, game) {
 		} else if (forecast && !cache.moved) {
 			let target = dialog.options[dialog.index]
 			focus = target.cell
-		} else if (!cursor.selection || !game.phase.pending.includes(cursor.selection.unit) || cache.moved) {
+		} else if (moving) {
+			focus = anim.data.cell
+		} else {
 			focus = cursor.cell
-		} else if (cursor.selection && game.phase.pending.includes(cursor.selection.unit)) {
+		}/* else if (cursor.selection && game.phase.pending.includes(cursor.selection.unit)) {
 			focus = cursor.selection.unit.cell
-		}
+		}*/
 	}
 
 	if (!viewport.target) {
@@ -500,6 +509,7 @@ export function render(view, game) {
 					}
 				} else if (target && !Unit.allied(unit, target)
 				&& Cell.manhattan(dest, target.cell) > unit.equipment.weapon.rng
+				&& Map.walkable(map, target.cell, unit.cell)
 				) {
 					let neighbors = Cell.neighborhood(target.cell, unit.equipment.weapon.rng)
 					if (path) {
@@ -588,7 +598,13 @@ export function render(view, game) {
 		}
 	}
 
-	let relative = cursor.cell[1] * 16 + 8 - viewport.target[1]
+	let relative = free(cursor.cell[1]) - viewport.target[1]
+	if (moving) {
+		let path = anim.data.path
+		let dest = path[path.length - 1]
+		relative = free(dest[1]) - viewport.size[1] / 2
+	}
+
 	let below = relative >= viewport.size[1] / 2
 
 	// primary dialog, for hovered units and selections
@@ -924,10 +940,12 @@ export function render(view, game) {
 							let a = Canvas(content.length * 8 + 1, 9)
 							a.drawImage(red, 1, 1)
 							a.drawImage(text, 0, 0)
+							animation.push(a.canvas)
+							/*
 							let b = Canvas(content.length * 8 + 1, 9)
 							b.drawImage(text, 1, 1)
 							b.drawImage(red, 0, 0)
-							animation.push(a.canvas, a.canvas, b.canvas, b.canvas)
+							animation.push(a.canvas, a.canvas, b.canvas, b.canvas)*/
 						} else {
 							let shadow = sprites.ui.Text(content, color)
 							let context = Canvas(content.length * 8 + 1, 9)
@@ -1237,6 +1255,8 @@ export function render(view, game) {
 			cache.squares.length = 0
 			cache.ranges.length = 0
 			cache.moved = false
+			cursor.cell = unit.cell.slice()
+			cursor.under = cursor.selection
 			cursor.selection = null
 			cache.selection = null
 			dialogs.length = 0
@@ -1361,7 +1381,7 @@ export function render(view, game) {
 		})
 	}
 
-	if (cache.attack && attack.power === 3 && cache.attack.time === 1) {
+	if (cache.attack && attack.power === 3 && cache.attack.connected && cache.attack.time <= 3) {
 		context.fillStyle = "white"
 		context.fillRect(0, 0, context.canvas.width, context.canvas.height)
 	} else {
