@@ -2,21 +2,18 @@ import sourcemap from "../dist/tmp/sprites.json"
 import extract from "../lib/img-extract"
 import pixels from "../lib/pixels"
 import Canvas from "../lib/canvas"
-import colors from "./palette"
-
-const symbols = {
-	warrior: "axe",
-	knight: "shield",
-	rogue: "dagger",
-	mage: "hat"
-}
+import * as Unit from "../lib/unit"
+import rgba from "../lib/rgba"
+import palette from "./palette"
+import * as icons from "./icons"
 
 export default function normalize(spritesheet) {
 	let sprites = disassemble(spritesheet, sourcemap)
 	return {
-		pieces:  pieces(sprites.piece),
-		ui:      ui(sprites.ui),
-		effects: effects(),
+		pieces:  pieces(sprites),
+		ui:      ui(sprites),
+		effects: effects(sprites),
+		icons: sprites.icons,
 		maps: sprites.maps
 	}
 }
@@ -35,7 +32,25 @@ function disassemble(spritesheet, sourcemap) {
 	return sprites
 }
 
-function effects() {
+function effects(sprites) {
+	return {
+		shockwave: shockwave(sprites.effects.shockwave),
+		particles: particles()
+	}
+}
+
+function shockwave(sprites) {
+	let length = sprites.width / 32
+	let front = new Array(length)
+	let back = new Array(length)
+	for (let i = 0; i < length; i++) {
+		back[i] = extract(sprites, i * 32, 0, 32, 12)
+		front[i]  = extract(sprites, i * 32, 12, 32, 12)
+	}
+	return { front, back }
+}
+
+function particles() {
 	let small = Canvas(1, 1)
 	small.fillStyle = "white"
 	small.fillRect(0, 0, 1, 1)
@@ -61,98 +76,98 @@ function pieces(sprites) {
 			ally: {}
 		},
 		flashing: null,
-		symbols: sprites.symbols,
-		shadow: sprites.shadow
+		flashingStacked: null,
+		shadow: sprites.piece.shadow
 	}
 
 	let palettes = {
-		player: [ colors.cyan, colors.blue, colors.navy ],
-		enemy:  [ colors.pink, colors.red, colors.purple ],
-		ally:   [ colors.lime, colors.green, colors.teal ]
+		player: [ palette.cyan, palette.blue, palette.navy ],
+		enemy:  [ palette.pink, palette.red, palette.purple ],
+		ally:   [ palette.lime, palette.green, palette.teal ]
 	}
 
 	for (let faction in palettes) {
-		let palette = palettes[faction]
-		for (let name in sprites.symbols) {
-			let source = sprites.symbols[name]
-			let symbol = Canvas(source.width, source.height)
-			symbol.drawImage(source, 0, 0)
+		let colors = palettes[faction]
+		for (let type in icons.units) {
+			let name = icons.units[type]
+			let icon = sprites.icons[name]
+			let piece = Piece(icon, colors)
+			let done = Piece(icon, [
+				colors[1],
+				colors[2],
+				palette.black
+			])
+			if (!Unit.promoted(type)) {
+				pieces[faction][type] = piece
+				pieces.done[faction][type] = done
+			} else {
+				let stackedPiece = Canvas(piece.width, piece.height + 3)
+				stackedPiece.drawImage(piece, 0, 3)
+				stackedPiece.drawImage(piece, 0, 0)
 
-			let base = sprites.base
-				.getContext("2d")
-				.getImageData(0, 0, 16, 16)
+				let stackedDone = Canvas(piece.width, piece.height + 3)
+				stackedDone.drawImage(done, 0, 3)
+				stackedDone.drawImage(done, 0, 0)
 
-			pixels.replace(base, colors.white, palette[1])
-			pixels.replace(base, colors.black, palette[2])
-
-			let piece = Canvas(base.width, base.height)
-			piece.putImageData(base, 0, 0)
-
-			let template = symbol.getImageData(0, 0, source.width, source.height)
-			pixels.replace(template, colors.white, palette[0])
-			symbol.putImageData(template, 0, 0)
-			piece.drawImage(symbol.canvas, 4, 4)
-
-			pixels.replace(template, palette[0], palette[2])
-			symbol.putImageData(template, 0, 0)
-			piece.drawImage(symbol.canvas, 4, 3)
-
-			pieces[faction][name] = piece.canvas
+				pieces[faction][type] = stackedPiece.canvas
+				pieces.done[faction][type] = stackedDone.canvas
+			}
 		}
 	}
 
-	for (let faction in palettes) {
-		let palette = palettes[faction]
-		for (let name in sprites.symbols) {
-			let source = sprites.symbols[name]
-			let symbol = Canvas(source.width, source.height)
-			symbol.drawImage(source, 0, 0)
-
-			let base = sprites.base
-				.getContext("2d")
-				.getImageData(0, 0, 16, 16)
-
-			pixels.replace(base, colors.white, palette[2])
-
-			let piece = Canvas(base.width, base.height)
-			piece.putImageData(base, 0, 0)
-
-			let template = symbol.getImageData(0, 0, source.width, source.height)
-			pixels.replace(template, colors.white, palette[1])
-			symbol.putImageData(template, 0, 0)
-			piece.drawImage(symbol.canvas, 4, 4)
-
-			pixels.replace(template, palette[1], colors.black)
-			symbol.putImageData(template, 0, 0)
-			piece.drawImage(symbol.canvas, 4, 3)
-
-			pieces.done[faction][name] = piece.canvas
-		}
-	}
-
-	let base = sprites.base
+	let base = sprites.piece.base
 		.getContext("2d")
 		.getImageData(0, 0, 16, 16)
 
-	pixels.replace(base, colors.black, colors.white)
+	pixels.replace(base, palette.black, palette.white)
 
-	let piece = Canvas(base.width, base.height)
-	piece.putImageData(base, 0, 0)
-	pieces.flashing = piece.canvas
+	let flashing = Canvas(base.width, base.height)
+	flashing.putImageData(base, 0, 0)
+	pieces.flashing = flashing.canvas
+
+	let flashingStacked = Canvas(base.width, base.height + 3)
+	flashingStacked.putImageData(base, 0, 3)
+	flashingStacked.drawImage(flashingStacked.canvas, 0, -3)
+	pieces.flashingStacked = flashingStacked.canvas
 
 	return pieces
+
+	function Piece(icon, colors) {
+		let base = sprites.piece.base
+			.getContext("2d")
+			.getImageData(0, 0, 16, 16)
+
+		pixels.replace(base, palette.white, colors[1])
+		pixels.replace(base, palette.black, colors[2])
+
+		let piece = Canvas(base.width, base.height)
+		piece.putImageData(base, 0, 0)
+
+		let tmp = Canvas(8, 8)
+		let template = icon.getContext("2d")
+			.getImageData(0, 0, icon.width, icon.height)
+
+		pixels.replace(template, palette.white, colors[0])
+		tmp.putImageData(template, 0, 0)
+		piece.drawImage(tmp.canvas, 4, 4)
+
+		pixels.replace(template, colors[0], colors[2])
+		tmp.putImageData(template, 0, 0)
+		piece.drawImage(tmp.canvas, 4, 3)
+
+		return piece.canvas
+	}
 }
 
 function ui(sprites) {
 	let ui = {
-		symbols:   sprites.symbols,
-		cursor:    cursor(sprites.cursor),
-		typeface:  typeface(sprites.typeface),
-		healthbar: sprites.healthbar,
-		words:     words(sprites.words),
-		box:       box(sprites.box),
-		squares:   squares(sprites.squares),
-		arrows:    arrows(sprites.arrows)
+		cursor:    cursor(sprites.ui.cursor),
+		typeface:  typeface(sprites.ui.typeface),
+		healthbar: sprites.ui.healthbar,
+		words:     words(sprites.ui.words),
+		box:       box(sprites.ui.box),
+		squares:   squares(sprites.ui.squares),
+		arrows:    arrows(sprites.ui.arrows)
 	}
 
 	let coloredTypefaces = {}
@@ -162,6 +177,8 @@ function ui(sprites) {
 	ui.TextBox = TextBox
 	ui.HealthBar = HealthBar
 	ui.UnitDetails = UnitDetails
+	ui.UnitStats = UnitStats
+	ui.StatsDelta = StatsDelta
 	ui.Arrow = Arrow
 
 	return ui
@@ -187,8 +204,17 @@ function ui(sprites) {
 
 	function squares(sheet) {
 		return {
-			move:   extract(sheet,  0, 0, 16, 16),
-			attack: extract(sheet, 16, 0, 16, 16)
+			move: square(palette.blue),
+			attack: square(palette.red),
+			fuse: square(palette.yellow)
+		}
+
+		function square(color) {
+			let context = Canvas(16, 16)
+			context.fillStyle = rgba(color)
+			context.globalAlpha = 0.66
+			context.fillRect(0, 0, 15, 15)
+			return context.canvas
 		}
 	}
 
@@ -208,12 +234,12 @@ function ui(sprites) {
 
 	function words(sprites) {
 		let playerPhase = Canvas(188, 18)
-		render(playerPhase, sprites.player, colors.blue, 0)
-		render(playerPhase, sprites.phase, colors.blue, 104)
+		render(playerPhase, sprites.player, palette.blue, 0)
+		render(playerPhase, sprites.phase, palette.blue, 104)
 
 		let enemyPhase = Canvas(170, 18)
-		render(enemyPhase, sprites.enemy, colors.red, 0)
-		render(enemyPhase, sprites.phase, colors.red, 90)
+		render(enemyPhase, sprites.enemy, palette.red, 0)
+		render(enemyPhase, sprites.phase, palette.red, 90)
 
 		return {
 			playerPhase: playerPhase.canvas,
@@ -225,7 +251,7 @@ function ui(sprites) {
 				.getContext("2d")
 				.getImageData(0, 0, word.width, word.height)
 
-			pixels.replace(shadow, colors.white, color)
+			pixels.replace(shadow, palette.white, color)
 
 			let temp = Canvas(word.width, word.height)
 			temp.putImageData(shadow, 0, 0)
@@ -274,12 +300,12 @@ function ui(sprites) {
 			return coloredTypefaces[color][char]
 		}
 
-		let sprite = sprites.typeface
+		let sprite = sprites.ui.typeface
 		let image = sprite
 			.getContext("2d")
 			.getImageData(0, 0, sprite.width, sprite.height)
 
-		pixels.replace(image, colors.white, color)
+		pixels.replace(image, palette.white, color)
 
 		let context = Canvas(sprite.width, sprite.height)
 		context.putImageData(image, 0, 0)
@@ -357,29 +383,32 @@ function ui(sprites) {
 	}
 
 	function HealthBar(content, faction) {
-		let palette = {
-			player: "rgb(144, 224, 232)",
-			enemy:  "rgb(248, 192, 224)",
-			ally:   "rgb(200, 224, 255)",
+		let colors = {
+			player: { default: palette.cyan, dark: palette.blue  },
+			enemy:  { default: palette.pink, dark: palette.red   },
+			ally:   { default: palette.lime, dark: palette.green }
 		}
 		let context = Canvas(48, 8)
 		context.drawImage(ui.healthbar, 0, 0)
-		context.fillStyle = palette[faction]
-		// context.fillRect(2, 2, Math.floor(content * 44), 4)
-		context.fillRect(3, 3, Math.floor(content * 42), 2)
+		context.fillStyle = rgba(colors[faction].default)
+		context.fillRect(3, 3, Math.min(42, content * 14), 2)
+		if (content > 3) {
+			context.fillStyle = rgba(colors[faction].dark)
+			context.fillRect(3, 3, Math.min(42, (content - 3) * 14), 2)
+		}
 		return context.canvas
 	}
 
 	function UnitDetails(unit) {
-		let symbol = ui.symbols[symbols[unit.type]]
+		let icon = sprites.icons[icons.units[unit.type]]
 		let name = Text(unit.name)
-		let nameDialog = Box(name.width + symbol.width + 20, 24)
+		let nameDialog = Box(name.width + icon.width + 20, 24)
 		let context = nameDialog.getContext("2d")
-		context.drawImage(symbol, 8, 8)
+		context.drawImage(icon, 8, 8)
 		context.drawImage(name, 20, 8)
 
 		let hpDialog = Box(84, 24)
-		let bar = HealthBar(unit.hp / 3, unit.faction)
+		let bar = HealthBar(unit.hp, unit.faction)
 		let label = Text("HP")
 		context = hpDialog.getContext("2d")
 		context.drawImage(label, 8, 8)
@@ -389,6 +418,34 @@ function ui(sprites) {
 			name: nameDialog,
 			hp: hpDialog
 		}
+	}
+
+	function UnitStats(unit, stats) {
+		let box = Box(64, stats.length * 8 + 16)
+			.getContext("2d")
+		for (let i = 0; i < stats.length; i++) {
+			let stat = stats[i]
+			let value = Unit[stat](unit.type)
+			let icon = stat === "atk"
+				? icons.weapons[Unit.wpn(unit.type).type]
+				: icons.stats[stat]
+			box.drawImage(sprites.icons[icon], 8, i * 8 + 8)
+			box.drawImage(Text(stat.toUpperCase()), 20, i * 8 + 8)
+			box.drawImage(Text(value.toString()), 48, i * 8 + 8)
+		}
+		return box.canvas
+	}
+
+	function StatsDelta(delta) {
+		let box = Box(32, delta.length * 8 + 16)
+			.getContext("2d")
+		for (let i = 0; i < delta.length; i++) {
+			let value = delta[i]
+			let sign = value >= 0 ? "+" : "-"
+			let text = Text(sign + value)
+			box.drawImage(text, 8, i * 8 + 8)
+		}
+		return box.canvas
 	}
 
 	function Arrow(path) {
@@ -491,7 +548,7 @@ function typeface(image) {
 		`abcdefghij` +
 		`klmnopqrst` +
 		`uvwxyz;:'"` +
-		`()/\\-     `
+		`()/\\-+    `
 
 	let typeface = {}
 	let i = 0

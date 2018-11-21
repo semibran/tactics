@@ -41,10 +41,15 @@ export default {
 		]
 	},
 	units: [
-		[ "Hector",  "warrior", "player", false,    [  7, 27 ] ],
-		[ "Oswin",   "knight",  "player", false,    [  9, 28 ] ],
-		[ "Matthew", "rogue",   "player", false,    [  8, 30 ] ],
-		[ "Erk",     "mage",    "player", false,    [  6, 29 ] ],
-		[ "Nergal",  "mage",    "enemy",  "defend", [  1,  6 ] ],
+		[ "Hector",  "fighter",  "player", null,     [  7, 27 ] ],
+		[ "Bartre",  "fighter",  "player", null,     [  9, 26 ] ],
+		[ "Oswin",   "knight",   "player", null,     [  9, 28 ] ],
+		[ "Wallace", "knight",   "player", null,     [ 11, 27 ] ],
+		[ "Matthew", "thief",    "player", null,     [  8, 30 ] ],
+		[ "Jaffar",  "thief",    "player", null,     [ 10, 29 ] ],
+		[ "Erk",     "mage",     "player", null,     [  6, 29 ] ],
+		[ "Nino",    "mage",     "player", null,     [  4, 28 ] ],
+		[ "Nergal",  "sorcerer", "enemy",  "defend", [  1,  6 ] ],
+		[ "Darin",   "general",  "enemy",  "defend", [  8, 21 ] ],
 	]
 }

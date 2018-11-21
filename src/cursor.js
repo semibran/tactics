@@ -12,8 +12,10 @@ export function update(cursor, keys, game, view) {
 	if (held.confirm && !prev.confirm) {
 		if (!cursor.selection) {
 			if (cursor.under) {
-				cursor.selection = cursor.under
-				cursor.selection.time = 0
+				cursor.selection = {
+					unit: cursor.under,
+					time: view.state.time
+				}
 			}
 		} else {
 			let unit = cursor.selection.unit
@@ -26,14 +28,22 @@ export function update(cursor, keys, game, view) {
 					if (path && path.length > 1) {
 						let dest = path[path.length - 1].slice()
 						let target = Map.unitAt(map, cursor.cell)
-						if (range.move.find(cell => Cell.equals(cell, cursor.cell))) {
+						let move = !target
+							&& range.move.find(cell => Cell.equals(cell, cursor.cell))
+						let attack = target && !Unit.allied(unit, target)
+							&& range.attack.find(cell => Cell.equals(cell, cursor.cell))
+						let fuse = target && Unit.allied(unit, target)
+							&& range.fuse.find(cell => Cell.equals(cell, cursor.cell))
+
+						if (move || attack || fuse) {
 							Unit.move(cached, dest, map)
-						} else if (target && range.attack.find(cell => Cell.equals(cell, cursor.cell))) {
-							Unit.move(cached, dest, map)
-							if (!view.cache.target) {
-								view.cache.target = {
-									unit: target,
-									time: 0
+							if (target) {
+								if (!view.cache.target) {
+									view.cache.target = {
+										time: view.state.time,
+										unit: target,
+										hp: target.hp
+									}
 								}
 							}
 						}
@@ -42,14 +52,15 @@ export function update(cursor, keys, game, view) {
 					}
 				}
 			} else {
-				deselect(cursor)
+				cursor.selection = null
 			}
 		}
 	}
 
 	if (held.mod && cursor.selection && phase.pending.includes(cursor.selection.unit)) {
 		let unit = cursor.selection.unit
-		let index = map.units.indexOf(unit)
+		let cached = view.cache.units.find(cached => cached.original === unit)
+		let index = view.cache.units.indexOf(cached)
 		let range = view.cache.ranges[index]
 		if (held.left && !prev.left && !held.right) {
 			for (var x = cursor.cell[0]; x >= 0; x--) {
@@ -135,20 +146,7 @@ export function update(cursor, keys, game, view) {
 		}
 	}
 
-	let unit = Map.unitAt(map, cursor.cell)
-	if (unit) {
-		if (!cursor.under || unit !== cursor.under.unit) {
-			if (!cursor.under && view.cache.selected && view.cache.selected.unit === unit) {
-				cursor.under = view.cache.selected
-			} else {
-				cursor.under = { unit, time: 0 }
-			}
-		} else {
-			cursor.under.time++
-		}
-	} else {
-		cursor.under = null
-	}
+	cursor.under = Map.unitAt(map, cursor.cell)
 
 	if (!cursor.selection) {
 		if (held.select && !prev.select) {
@@ -156,19 +154,6 @@ export function update(cursor, keys, game, view) {
 			cycle(cursor, game, reverse)
 		}
 	}
-}
-
-export function select(cursor, unit) {
-	if (!cursor.selection) {
-		cursor.selection = {
-			unit: unit,
-			time: 0
-		}
-	}
-}
-
-export function deselect(cursor) {
-	cursor.selection = null
 }
 
 export function move(cursor, direction, map) {

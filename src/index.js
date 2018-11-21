@@ -33,10 +33,10 @@ function main(spritesheet) {
 		let { held, prev } = keys
 		let cursor = view.state.cursor
 		let anims = view.state.anims
-		let dialogs = view.state.dialogs
-		let dialog = dialogs[0]
-		if (dialog) {
-			Menu.update(dialog.menu, keys)
+		let screens = view.state.screens
+		let screen = screens[0]
+		if (screen) {
+			Menu.update(screen.menu, keys)
 		} else if (game.phase.faction === "player"
 		&& !view.state.attacks.length
 		&& !view.cache.moved
@@ -103,7 +103,7 @@ function main(spritesheet) {
 										power: power,
 										damage: damage,
 									})
-									if (target.hp && Cell.manhattan(target.cell, unit.cell) <= Unit.rng(target)) {
+									if (target.hp && Cell.manhattan(target.cell, unit.cell) <= Unit.rng(target.type)) {
 										let power = Unit.dmg(target, unit)
 										let damage = Math.min(unit.hp, Number(power))
 										Unit.attack(target, unit)
@@ -154,25 +154,25 @@ function main(spritesheet) {
 		if (held.cancel && !prev.cancel) {
 			let anim = view.state.anims[0]
 			if (!anim || anim.type !== "move") {
-				if (dialog) {
-					if (dialog.type === "pause") {
+				if (screen) {
+					if (screen.type === "pause") {
 						view.state.paused = false
-					} else if (dialog.type === "actions") {
+					} else if (screen.type === "actions") {
 						let unit = view.state.cursor.selection.unit
 						let index = game.map.units.indexOf(unit)
 						view.cache.units[index].cell = unit.cell
 						view.cache.moved = null
 					}
-					dialogs.shift()
-					if (dialogs.length) {
-						dialog = dialogs[0]
-						if (dialog.type === "actions") {
-							dialog.menu.done = false
+					screens.shift()
+					if (screens.length) {
+						screen = screens[0]
+						if (screen.type === "actions") {
+							screen.menu.done = false
 						}
 					}
 				} else {
 					if (cursor.selection) {
-						Cursor.deselect(cursor)
+						cursor.selection = null
 					} else if (!view.state.attacks.length
 					&& !(anim && anim.type === "phase")
 					) {
@@ -184,7 +184,7 @@ function main(spritesheet) {
 
 		Keys.update(keys)
 		requestAnimationFrame(loop)
-		// setTimeout(loop, 1000 / 30)
+		// setTimeout(loop, 1000 / 15)
 	}
 }
 
